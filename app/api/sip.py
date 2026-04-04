@@ -151,7 +151,7 @@ async def make_outbound_call(request: MakeCallRequest, api_key: str = Depends(au
 
 @router.post("/sip/calls/dial", response_model=CallStatusResponse)
 @monitor_api("api.v1.sip.calls.dial")
-async def dial_outbound_call(request: MakeCallRequest, token: str = Depends(authenticate_static_token)):
+async def dial_outbound_call(request: MakeCallRequest, _api_key: str = Depends(authenticate_static_token)):
     """
     Initiate an outbound SIP call
     """    
@@ -209,7 +209,7 @@ async def end_call(request: EndCallRequest, api_key: str = Depends(authenticate_
 
 @router.post("/sip/calls/hangup", response_model=CallStatusResponse)
 @monitor_api("api.v1.sip.calls.hangup")
-async def hangup_call(request: EndCallRequest, token: str = Depends(authenticate_static_token)):
+async def hangup_call(request: EndCallRequest, _api_key: str = Depends(authenticate_static_token)):
     """
     End an active SIP call
     """

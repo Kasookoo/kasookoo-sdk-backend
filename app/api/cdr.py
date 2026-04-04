@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.api.auth import get_organization_id, sdk_token_scheme
+from app.api.auth import get_organization_id
 from app.services.call_manager import WebRTCCallManager
 from app.services.recording_manager import LiveKitS3RecordingManager
 from app.services.token_service import TokenService
@@ -154,7 +154,6 @@ async def export_call_sessions_csv(
     date_field: str = Query("created_at"),
     max_rows: int = Query(50000, ge=1, le=100000),
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
 ):
     date_from_dt, date_to_dt = _parse_cdr_query_dates(date_from, date_to)
@@ -202,7 +201,6 @@ async def get_call_sessions(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
 ):
     try:

@@ -8,7 +8,8 @@ from typing import Optional
 from bson.errors import InvalidId
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from app.api.auth import get_organization_id, normal_authenticate_token, require_scopes, sdk_token_scheme
+from app.api.auth import get_organization_id
+from app.security.interceptor import authenticate_sdk_user, intercept_sdk_access
 from app.models.models import (
     ConversationInfo,
     ConversationListResponse,
@@ -38,10 +39,8 @@ async def messaging_startup() -> None:
 async def get_messaging_token(
     request: MessagingTokenRequest,
     background_tasks: BackgroundTasks,
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["messaging:token:create"])),
+    _principal: dict = Depends(intercept_sdk_access(["messaging:token:create"])),
 ) -> TokenResponse:
-    await normal_authenticate_token(token)
     try:
         return await messaging_service.prepare_push_notification(request=request, background_tasks=background_tasks)
     except ValueError as e:
@@ -55,11 +54,9 @@ async def get_messaging_token(
 async def send_message(
     request: SendMessageRequest,
     background_tasks: BackgroundTasks,
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
-    _principal: dict = Depends(require_scopes(["messaging:send"])),
+    _principal: dict = Depends(intercept_sdk_access(["messaging:send"])),
 ) -> MessageResponse:
-    await normal_authenticate_token(token)
     try:
         sender, receiver = await asyncio.gather(
             asyncio.to_thread(user_service.get_user_by_id, request.sender_user_id, organization_id),
@@ -108,10 +105,10 @@ async def send_message(
 async def get_conversations(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
+    _principal: dict = Depends(authenticate_sdk_user),
 ) -> ConversationListResponse:
-    _, email, _ = await normal_authenticate_token(token)
+    email = str(_principal.get("email") or _principal.get("sub") or "")
     user = user_service.get_user_by_email(email, organization_id=organization_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -136,10 +133,10 @@ async def get_messages(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
     include_messaging_tokens: bool = Query(False),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
+    _principal: dict = Depends(authenticate_sdk_user),
 ) -> MessageListResponse:
-    _, email, _ = await normal_authenticate_token(token)
+    email = str(_principal.get("email") or _principal.get("sub") or "")
     user = user_service.get_user_by_email(email, organization_id=organization_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -180,10 +177,10 @@ async def get_messages(
 @monitor(name="api.messaging.mark_read")
 async def mark_messages_read(
     request: MarkMessagesReadRequest,
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
+    _principal: dict = Depends(authenticate_sdk_user),
 ) -> dict:
-    _, email, _ = await normal_authenticate_token(token)
+    email = str(_principal.get("email") or _principal.get("sub") or "")
     user = user_service.get_user_by_email(email, organization_id=organization_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -201,10 +198,10 @@ async def mark_messages_read(
 @monitor(name="api.messaging.delete_message")
 async def delete_message(
     message_id: str,
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
+    _principal: dict = Depends(authenticate_sdk_user),
 ) -> dict:
-    _, email, _ = await normal_authenticate_token(token)
+    email = str(_principal.get("email") or _principal.get("sub") or "")
     user = user_service.get_user_by_email(email, organization_id=organization_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -220,10 +217,10 @@ async def delete_message(
 async def delete_conversation(
     conversation_id: str,
     delete_messages: bool = Query(False),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
+    _principal: dict = Depends(authenticate_sdk_user),
 ) -> dict:
-    _, email, _ = await normal_authenticate_token(token)
+    email = str(_principal.get("email") or _principal.get("sub") or "")
     user = user_service.get_user_by_email(email, organization_id=organization_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -240,10 +237,10 @@ async def delete_conversation(
 @monitor(name="api.messaging.get_unread_count")
 async def get_unread_count(
     conversation_id: Optional[str] = Query(None),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
+    _principal: dict = Depends(authenticate_sdk_user),
 ) -> dict:
-    _, email, _ = await normal_authenticate_token(token)
+    email = str(_principal.get("email") or _principal.get("sub") or "")
     user = user_service.get_user_by_email(email, organization_id=organization_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -256,10 +253,10 @@ async def get_unread_count(
 @monitor(name="api.messaging.get_message_count")
 async def get_message_count(
     conversation_id: Optional[str] = Query(None),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
+    _principal: dict = Depends(authenticate_sdk_user),
 ) -> dict:
-    _, email, _ = await normal_authenticate_token(token)
+    email = str(_principal.get("email") or _principal.get("sub") or "")
     user = user_service.get_user_by_email(email, organization_id=organization_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

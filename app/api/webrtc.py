@@ -27,12 +27,8 @@ from app.services.recording_manager import LiveKitS3RecordingManager
 from app.services.token_service import TokenService
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api.auth import (
-    sdk_token_scheme,
-    authenticate_token as normal_authenticate_token,
-    authenticate_static_token,
-    require_scopes,
-)
+from app.api.auth import authenticate_static_token
+from app.security.interceptor import authenticate_sdk_user, intercept_sdk_access
 
 from app.utils.websocket_manager import WebSocketManager
 from app.utils.performance_monitor import monitor
@@ -311,13 +307,12 @@ async def get_caller_livekit_token(
     request: CallerTokenRequest,
     background_tasks: BackgroundTasks,
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme)
+    _principal: dict = Depends(authenticate_sdk_user),
 ):
     """
     Generates a LiveKit access token with specific permissions.
     For a 'monitor-client', we disable publishing rights.
     """
-    username = await normal_authenticate_token(token)
     logger.info({"event": "get_caller_livekit_token_request", "request": request.dict() if hasattr(request, 'dict') else str(request)})
     logger.info({"event": "device_type_received", "device_type": request.device_type})
     logger.info({"event": "caller_user_id_found", "caller_user_id": request.caller_user_id})
@@ -720,14 +715,12 @@ async def get_caller_token(
     request: CallerTokenRequest,
     background_tasks: BackgroundTasks,
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["webrtc:token:create"])),
+    _principal: dict = Depends(intercept_sdk_access(["webrtc:token:create"])),
 ):
     """
     Generates a LiveKit access token with specific permissions.
     For a 'monitor-client', we disable publishing rights.
     """
-    username = await normal_authenticate_token(token)
     called_user_name, called_user_role = await _prepare_caller_call_flow(request, background_tasks, manager)
     return await get_token_endpoint(request)
 
@@ -738,13 +731,11 @@ async def get_call_tokens(
     request: CallerTokenRequest,
     background_tasks: BackgroundTasks,
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["webrtc:token:create"])),
+    _principal: dict = Depends(intercept_sdk_access(["webrtc:token:create"])),
 ) -> TokenResponse:
     """
     Extended version of caller token API that also returns the called participant's token.
     """
-    username = await normal_authenticate_token(token)
     called_user_name, called_user_role = await _prepare_caller_call_flow(
         request, background_tasks, manager
     )
@@ -1037,14 +1028,12 @@ async def _prepare_messaging_flow(
 async def get_called_token(
     request: CalledTokenRequest,
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["webrtc:token:create"])),
+    _principal: dict = Depends(intercept_sdk_access(["webrtc:token:create"])),
 ):
     """
     Generates a LiveKit access token with specific permissions.
     For a 'monitor-client', we disable publishing rights.
     """
-    username = await normal_authenticate_token(token)
     try:
         user = user_service.get_user_by_id(request.called_user_id)
     except InvalidId:
@@ -1085,11 +1074,9 @@ async def get_called_token(
 async def end_call(
     room_name: str,
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["webrtc:call:end"])),
+    _principal: dict = Depends(intercept_sdk_access(["webrtc:call:end"])),
 ):
     """End an active call and destroy the LiveKit room"""
-    username = await normal_authenticate_token(token)
     try:
         # Broadcast call ended event
         await websocket_manager.broadcast_to_room(room_name, {
@@ -1115,11 +1102,9 @@ async def end_call(
 async def get_call_status(
     room_name: str,
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["webrtc:call:read"])),
+    _principal: dict = Depends(intercept_sdk_access(["webrtc:call:read"])),
 ):
     """Get current call status and recording information"""
-    username = await normal_authenticate_token(token)
     try:
         return await manager.get_call_status(room_name)
     except Exception as e:
@@ -1130,21 +1115,18 @@ async def get_call_status(
 @monitor(name="api.webrtc.list_active_calls")
 async def list_active_calls(
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["webrtc:call:read"])),
+    _principal: dict = Depends(intercept_sdk_access(["webrtc:call:read"])),
 ):
     """List all active calls"""
-    username = await normal_authenticate_token(token)
     return await manager.list_active_calls()
 
 @router.get("/webrtc/calls/debug")
 @monitor(name="api.webrtc.debug_active_calls")
 async def debug_active_calls(
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme)
+    _principal: dict = Depends(authenticate_sdk_user),
 ):
     """Debug endpoint to check active calls state"""
-    username = await normal_authenticate_token(token)
     return {
         "active_calls": list(manager.active_calls.keys()),
         "active_calls_count": len(manager.active_calls),
@@ -1156,11 +1138,9 @@ async def debug_active_calls(
 @monitor(name="api.webrtc.start_standalone_recording")
 async def start_standalone_recording(
     request: RecordingRequest,
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["recording:start"])),
+    _principal: dict = Depends(intercept_sdk_access(["recording:start"])),
 ):
     """Start recording without call context (standalone recording)"""
-    username = await normal_authenticate_token(token)
     try:
         options = request.options or {}
         egress_id = await recording_manager.start_recording_to_s3(
@@ -1181,11 +1161,9 @@ async def start_standalone_recording(
 @monitor(name="api.webrtc.get_recording_status")
 async def get_recording_status(
     egress_id: str,
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["recording:read"])),
+    _principal: dict = Depends(intercept_sdk_access(["recording:read"])),
 ):
     """Get recording status and information"""
-    username = await normal_authenticate_token(token)
     try:
         status = await recording_manager.get_recording_status(egress_id)
         if not status:
@@ -1201,11 +1179,9 @@ async def get_recording_status(
 @monitor(name="api.webrtc.stop_standalone_recording")
 async def stop_standalone_recording(
     egress_id: str,
-    token: str = Depends(sdk_token_scheme),
-    _principal: dict = Depends(require_scopes(["recording:stop"])),
+    _principal: dict = Depends(intercept_sdk_access(["recording:stop"])),
 ):
     """Stop a standalone recording"""
-    username = await normal_authenticate_token(token)
     try:
         success = await recording_manager.stop_recording(egress_id)
         return {

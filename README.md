@@ -31,6 +31,123 @@ A comprehensive WebRTC and SIP calling backend service built with FastAPI, LiveK
 - **WebSockets** - Real-time communication
 - **AWS S3** - Call recording storage
 
+## Architecture
+
+The diagrams below describe the **current** deployment shape: a single **FastAPI** process exposing REST (and WebSocket) APIs, with auth enforced via **`Depends`** (see `app/security/interceptor.py` and `app/api/auth.py`) before route handlers run.
+
+### System context
+
+Who talks to what at a high level: clients, this backend, and external systems.
+
+```mermaid
+flowchart TB
+    subgraph clients["Clients"]
+        FE["Browser / mobile apps"]
+        SDK["Frontend SDK"]
+    end
+
+    subgraph backend["Kasookoo SDK Backend (this service)"]
+        API["FastAPI app\n(main.py)"]
+    end
+
+    subgraph data["Data and realtime"]
+        MONGO[("MongoDB")]
+        LK["LiveKit\n(WebRTC / rooms)"]
+    end
+
+    subgraph integrations["Integrations"]
+        S3["AWS S3\n(recordings)"]
+        FCM["Firebase\n(push)"]
+        SIPNET["SIP / PSTN\n(via LiveKit SIP)"]
+    end
+
+    FE --> API
+    SDK --> API
+    API --> MONGO
+    API --> LK
+    API --> S3
+    API --> FCM
+    API --> SIPNET
+```
+
+**Notes:** SDK JWT issuance and session storage use MongoDB (`sdk_auth_sessions`, users, calls, messaging, etc.). LiveKit issues participant tokens computed server-side. Optional recording egress targets S3. Notifications use Firebase when configured.
+
+### Component diagram (inside this repository)
+
+Major **packages** and how they relate. Arrows show the main dependency direction (calls / uses).
+
+```mermaid
+flowchart TB
+    subgraph http["HTTP entry"]
+        MAIN["app/main.py\nFastAPI + CORS + Prometheus"]
+    end
+
+    subgraph routers["API routers app/api/"]
+        R_AUTH["auth"]
+        R_WRTC["webrtc"]
+        R_SIP["sip"]
+        R_MSG["messaging"]
+        R_NOTIF["notification"]
+        R_ASSOC["associated_numbers"]
+        R_CDR["cdr + dashboard"]
+        R_MON["monitoring"]
+    end
+
+    subgraph security["Security"]
+        SEC["app/security/\ninterceptor.py"]
+    end
+
+    subgraph coreauth["Auth and tokens"]
+        AUTH["auth.py\nJWT, sessions, JWKS,\nclient-sessions"]
+    end
+
+    subgraph services["app/services/"]
+        CM["call_manager"]
+        RM["recording_manager"]
+        TS["token_service"]
+        MS["messaging_service"]
+        NS["notification services"]
+        US["user_service"]
+        OS["organization_service"]
+        ANS["associated_number_service"]
+        SIPB["livekit_sip_bridge"]
+    end
+
+    subgraph utils["app/utils/"]
+        WSM["websocket_manager"]
+        MET["metrics / performance_monitor"]
+    end
+
+    MAIN --> routers
+    R_WRTC --> SEC
+    R_MSG --> SEC
+    R_ASSOC --> AUTH
+    R_CDR --> AUTH
+    R_AUTH --> AUTH
+    SEC --> AUTH
+    R_MON --> MET
+    R_WRTC --> CM
+    R_WRTC --> RM
+    R_WRTC --> TS
+    R_WRTC --> WSM
+    R_MSG --> MS
+    R_MSG --> US
+    R_SIP --> SIPB
+    R_NOTIF --> NS
+    R_ASSOC --> ANS
+    R_CDR --> CM
+    CM --> MONGO[("MongoDB")]
+    RM --> MONGO
+    MS --> MONGO
+    AUTH --> MONGO
+    CM --> LK["LiveKit APIs"]
+    RM --> LK
+    RM --> S3["S3"]
+    MAIN --> MET
+```
+
+**How to read it:** Routers are thin HTTP adapters. **`webrtc`** and **`messaging`** use **`intercept_sdk_access` / `authenticate_sdk_user`** (`interceptor.py`) before handlers; they delegate to **`auth.py`** for JWT verification, session checks, and scopes. **`associated_numbers`**, **`cdr`**, and **`dashboard`** rely on **`auth.py`** (e.g. `get_organization_id`) for JWT-backed org context. **`monitoring`** ties into **`metrics`** (Prometheus); it is not part of the SDK JWT interceptor chain. **`WebRTCCallManager`** coordinates call state and persistence; **`LiveKitS3RecordingManager`** handles egress/recording; **`MessagingService`** owns chat persistence; **`associated_number_service`** backs number mapping. **`notification`** routes proxy into the notification stack for FCM.
+
 ## 📋 Prerequisites
 
 - Python 3.13 or higher
@@ -294,7 +411,6 @@ See `POSTMAN_COLLECTION_README.md` for detailed usage instructions.
 - `GET /api/v1/sdk/auth/introspect` - Inspect validated SDK token (debug)
 - `GET /.well-known/jwks.json` - Public key set for RS256 token verification
 - `POST /api/v1/sdk/auth/client-sessions` - Create frontend SDK session directly from Kasookoo backend
-- `POST /api/v1/sdk/auth/token` - Admin/trusted mint endpoint (STATIC_API_KEY protected, optional)
 - `POST /api/v1/sdk/auth/sessions/{session_id}/tokens` - Refresh short-lived SDK token
 - `DELETE /api/v1/sdk/auth/sessions/{session_id}` - Revoke current session
 
@@ -328,7 +444,18 @@ Session state is now persisted in MongoDB collection `sdk_auth_sessions` (falls 
 
 ## 🔐 Authentication
 
-The API supports direct first-party SDK authentication and optional admin API-key auth:
+The API supports direct first-party SDK authentication and static API-key auth for selected server routes (SIP, internal proxies, etc.):
+
+### Request pipeline (Spring Boot–style “interceptor”)
+
+FastAPI resolves `Depends(...)` **before** your route handler runs—similar to a Spring `HandlerInterceptor.preHandle` or a servlet filter that runs first, then the controller.
+
+For SDK JWT routes, use helpers in `app/security/interceptor.py`:
+
+- **`authenticate_sdk_user`** — validates `Authorization: Bearer` SDK JWT and session only (authentication).
+- **`intercept_sdk_access(["scope:a", ...])`** — authentication **then** required scopes (authorization); same chain as `require_scopes` in `app/api/auth.py`.
+
+Handlers should rely on the injected principal from these dependencies instead of decoding the JWT again. WebRTC routes use this pattern.
 
 ### 1. Kasookoo Backend-Signed SDK Token (recommended for frontend SDK)
 Frontend must not sign tokens. The Kasookoo SDK backend now issues short-lived JWTs directly via `POST /api/v1/sdk/auth/client-sessions`.
@@ -347,7 +474,7 @@ Expected JWT claims:
 - `scopes` or `scope` (recommended)
 
 ### 2. Static API Key Authentication
-Used only for specific endpoints that are intentionally API-key protected.
+Used for specific endpoints that are intentionally API-key protected (not for minting SDK JWTs; use `client-sessions` for that).
 
 ```bash
 Authorization: Bearer <STATIC_API_KEY>
@@ -388,12 +515,15 @@ async function callKasookooApi(payload) {
 
 ### Backend-Signed SDK Token Flow (Sequence Diagram)
 
+This diagram covers **how the app gets its first session token** and **how that token is used** on protected APIs. It pairs with **Session Refresh & Revoke** below, which handles token rotation and logout after a session exists.
+
 ```mermaid
 sequenceDiagram
     autonumber
     participant FE as Frontend App (SDK Consumer)
     participant SDK as Kasookoo Frontend SDK
     participant KB as Kasookoo SDK Backend API
+    participant AUTH as Auth Depends (intercept_sdk_access)
     participant DB as MongoDB (sdk_auth_sessions)
     participant JWKS as /.well-known/jwks.json
 
@@ -406,49 +536,41 @@ sequenceDiagram
     KB->>DB: Upsert session (sid, sub, org, active=true)
     KB-->>SDK: { token, session_id, expires_in }
 
-    SDK->>KB: API call + Authorization: Bearer <backendSignedJwt with sid>
-    opt External verifier bootstrap
+    Note over SDK,AUTH: Protected routes: Depends() runs before the route handler (Spring-style interceptor)
+    SDK->>KB: HTTP request + Authorization: Bearer <JWT with sid>
+    KB->>AUTH: FastAPI resolves Depends(intercept_sdk_access) first
+    AUTH->>AUTH: Verify JWT signature (RS256 / HS256), exp/iat/aud/iss/sub/sid
+    AUTH->>DB: Verify sid is active and belongs to sub
+    AUTH->>AUTH: Enforce required scopes for this route
+    opt External verifier only (optional clients)
       SDK->>JWKS: GET /.well-known/jwks.json
       JWKS-->>SDK: RS256 public keys (kid)
     end
-    KB->>KB: Verify JWT signature (RS256 via JWT_PUBLIC_KEY or HS256 fallback)
-    KB->>KB: Validate exp/iat/aud/iss/sub/sid
-    KB->>DB: Verify sid is active and belongs to sub
-    KB->>KB: Validate scopes (require_scopes)
-    KB->>KB: Validate organization_id (if needed)
 
-    alt Token valid + scopes allowed
+    alt Auth dependency succeeds
+        AUTH-->>KB: Principal OK — route handler runs
+        KB->>KB: Business logic (e.g. issue LiveKit token, org checks if needed)
         KB-->>SDK: 200 Success + API response
         SDK-->>FE: Result
-    else Token invalid/expired/missing scope
-        KB-->>SDK: 401/403 Error
-        SDK->>KB: Refresh token / create new client session
+    else Auth dependency fails
+        AUTH-->>KB: 401/403 (handler not executed)
+        KB-->>SDK: Error response
+        SDK->>KB: Refresh token / new client-sessions
     end
 ```
 
-### Sample Token Mint Endpoint Flow (Sequence Diagram)
+**What this diagram shows (step by step):**
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant ADMIN as Trusted Server/Admin Tool
-    participant KB as Kasookoo Backend Auth API
-    participant JWT as JWT Signer (JWT_PRIVATE_KEY)
-    participant DB as MongoDB (sdk_auth_sessions)
-
-    Note over ADMIN,KB: Optional trusted endpoint for server-side/admin minting
-
-    ADMIN->>KB: POST /api/v1/sdk/auth/token
-    Note right of ADMIN: Headers: Authorization: Bearer <STATIC_API_KEY><br/>Body: sub, scopes, organization_id, ttl_seconds, session_id?, extra_claims
-
-    KB->>KB: Validate static API key
-    KB->>KB: Create/reuse sid + build claims (sub, sid, scopes, org, email, jti)
-    KB->>DB: Upsert sid as active
-    KB->>JWT: Sign token with JWT_PRIVATE_KEY
-    Note right of JWT: Add iat, exp, aud, iss + header kid
-    JWT-->>KB: signed JWT
-    KB-->>ADMIN: { token, token_type, session_id, expires_in, audience, issuer }
-```
+- The host app initializes the Kasookoo frontend SDK (for example with a publishable key or other init options).
+- The SDK calls **`POST /api/v1/sdk/auth/client-sessions`** with `sub`, optional `organization_id`, requested `scopes`, and `ttl_seconds`.
+- The backend checks that every requested scope is allowed (**`SDK_PUBLIC_ALLOWED_SCOPES`**).
+- The backend creates or updates a row in **`sdk_auth_sessions`**: a session id (**`sid`**) tied to `sub` and org, marked **active**.
+- The backend returns a short-lived **JWT** (`token`), **`session_id`** (same as `sid`), and **`expires_in`**.
+- For later calls (WebRTC, messaging, etc.), the SDK sends **`Authorization: Bearer <token>`**. **FastAPI runs the auth dependency chain first** (`intercept_sdk_access` / `authenticate_sdk_user` in `app/security/interceptor.py`)—the same idea as a Spring interceptor **before** the controller method. Only if that succeeds does the **route handler** run (issue LiveKit token, etc.).
+- Optionally, external clients may fetch **`GET /.well-known/jwks.json`** to verify RS256 signatures offline; this server verifies using configured keys inside the **Auth Depends** step.
+- The interceptor step verifies the JWT (signature, time claims, audience/issuer if configured, **`sub`**, **`sid`**), confirms the session is **active** in the DB and matches **`sub`**, and enforces **required scopes** (and org headers where applicable).
+- If the dependency chain succeeds, the handler returns **200** and the SDK surfaces the result to the app.
+- If it fails, the client gets **401/403** and the business handler does **not** run; the SDK should **refresh** (next diagram) or call **`client-sessions`** again.
 
 ### Session Refresh & Revoke Flow (Sequence Diagram)
 
@@ -457,22 +579,40 @@ sequenceDiagram
     autonumber
     participant SDK as Kasookoo Frontend SDK
     participant KB as Kasookoo Backend Auth API
+    participant AUTH as Auth Depends (get_sdk_principal)
     participant DB as MongoDB (sdk_auth_sessions)
 
     SDK->>KB: POST /api/v1/sdk/auth/sessions/{sid}/tokens (Bearer currentToken)
-    KB->>KB: Decode + verify JWT (signature, exp/iat/aud/iss, sid)
-    KB->>DB: Check sid is active and owned by sub
+    KB->>AUTH: Depends runs first: validate JWT + session
+    AUTH->>AUTH: Decode/verify JWT; path sid matches token sid
+    AUTH->>DB: Check sid is active and owned by sub
     alt session active
+        AUTH-->>KB: Principal OK — handler runs
         KB->>KB: Mint new short-lived token (same sid, new jti)
         KB-->>SDK: { token, session_id, expires_in }
     else session revoked/not found
+        AUTH-->>KB: Fail
         KB-->>SDK: 401 Session revoked or not found
     end
 
     SDK->>KB: DELETE /api/v1/sdk/auth/sessions/{sid} (Bearer currentToken)
+    KB->>AUTH: Depends: validate JWT + session ownership
+    AUTH->>DB: Confirm sid matches principal
+    AUTH-->>KB: OK — revoke handler runs
     KB->>DB: Set active=false for sid
     KB-->>SDK: { message: "Session revoked" }
 ```
+
+**What this diagram shows (step by step):**
+
+- **Refresh:** The SDK calls **`POST /api/v1/sdk/auth/sessions/{sid}/tokens`** with the **current** JWT in `Authorization: Bearer ...`. The path **`{sid}`** must match the **`sid`** inside the token.
+- **Auth Depends (`get_sdk_principal`)** runs **before** the refresh logic: decode/verify JWT, ensure **`sid`** matches the path, and check **`sdk_auth_sessions`** for an **active** session owned by **`sub`**.
+- If that dependency succeeds, the route handler **mints** a **new** JWT with the **same** `sid`, a new **`jti`**, and returns `token`, `session_id`, and `expires_in`.
+- If the session was revoked or missing, the dependency fails and the API returns **401** (“Session revoked or not found”) **without** minting.
+- **Revoke (logout):** The SDK calls **`DELETE /api/v1/sdk/auth/sessions/{sid}`** with the current Bearer token. The same **Auth Depends** step validates the token first; then the handler sets **`active=false`** for that `sid` so existing JWTs stop working on the next request.
+- The API confirms revocation with a short JSON message. After revoke, the client must use **`client-sessions`** again (first diagram) to obtain a **new** session if the user continues using the app.
+
+**How the two diagrams connect:** Diagram 1 **creates** `sid` and the first `token`. Diagram 2 **reuses** that `sid` to **rotate** the JWT (refresh) or **end** the session (revoke). Business API calls in Diagram 1 always use the latest valid token from either `client-sessions` or a successful refresh.
 
 ### Minimum Scopes by Endpoint
 

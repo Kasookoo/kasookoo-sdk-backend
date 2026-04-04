@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.auth import get_organization_id, sdk_token_scheme
+from app.api.auth import get_organization_id
 from app.services.call_manager import WebRTCCallManager
 from app.services.recording_manager import LiveKitS3RecordingManager
 from app.services.token_service import TokenService
@@ -67,7 +67,6 @@ async def get_dashboard_summary(
     date_to: Optional[str] = Query(None),
     date_field: str = Query("created_at"),
     manager: WebRTCCallManager = Depends(get_call_manager),
-    token: str = Depends(sdk_token_scheme),
     organization_id: str = Depends(get_organization_id),
 ) -> Dict[str, Any]:
     if date_field not in ("created_at", "started_at", "ended_at"):

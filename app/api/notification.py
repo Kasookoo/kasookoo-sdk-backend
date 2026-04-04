@@ -51,7 +51,7 @@ async def startup():
 
 @router.post("/notifications/register-token", response_model=None)
 @monitor_api("notifications.register-token")
-async def register_device_token_proxy(request: RegisterTokenRequest, token: str = Depends(authenticate_static_token)):
+async def register_device_token_proxy(request: RegisterTokenRequest, _api_key: str = Depends(authenticate_static_token)):
     """Register device token for push notifications"""
     user = user_service.get_user_by_id(request.user_id)
     if not user:
@@ -73,7 +73,7 @@ async def register_device_token_proxy(request: RegisterTokenRequest, token: str 
     
 @router.post("/notifications/update-token", response_model=None)
 @monitor_api("notifications.update-token")
-async def update_device_token_proxy(request: RegisterTokenRequest, token: str = Depends(authenticate_static_token)):
+async def update_device_token_proxy(request: RegisterTokenRequest, _api_key: str = Depends(authenticate_static_token)):
     """Update device token for push notifications"""
     try:
         success = await notification__service.register_device_token(
@@ -95,7 +95,7 @@ async def update_device_token_proxy(request: RegisterTokenRequest, token: str = 
     
 @router.post("/notifications/unregister-token", response_model=None)
 @monitor_api("notifications.unregister-token")
-async def unregister_device_token_proxy(request: RegisterTokenRequest, token: str = Depends(authenticate_static_token)):
+async def unregister_device_token_proxy(request: RegisterTokenRequest, _api_key: str = Depends(authenticate_static_token)):
     """Register device token for push notifications"""
     success = await notification__service.unregister_device_token(
         user_id=request.user_id,

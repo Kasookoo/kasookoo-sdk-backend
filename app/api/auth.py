@@ -119,15 +119,6 @@ def _decode_sdk_token(token: str) -> Dict[str, Any]:
     return payload
 
 
-class MintSdkTokenRequest(BaseModel):
-    sub: str = Field(..., description="Subject for the SDK token (user/session/device id)")
-    organization_id: Optional[str] = Field(default=None, description="Organization/tenant id")
-    email: Optional[str] = None
-    scopes: List[str] = Field(default_factory=list, description="List of scopes to include")
-    ttl_seconds: int = Field(default=SDK_SESSION_DURATION_SECONDS, ge=30, le=600, description="Token lifetime in seconds")
-    session_id: Optional[str] = Field(default=None, description="Existing session id to reuse")
-    extra_claims: Dict[str, Any] = Field(default_factory=dict, description="Optional additional claims")
-
 class CreateClientSessionRequest(BaseModel):
     sub: str = Field(..., description="Subject for SDK session token (user/device/guest id)")
     organization_id: Optional[str] = Field(default=None, description="Organization/tenant id")
@@ -283,39 +274,6 @@ def authenticate_static_token(credentials: HTTPAuthorizationCredentials = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     return credentials.credentials
-
-
-@router.post("/api/v1/sdk/auth/token")
-async def mint_sdk_token(
-    request: MintSdkTokenRequest,
-    _: str = Depends(authenticate_static_token),
-) -> Dict[str, Any]:
-    """
-    Sample/dev helper endpoint that mints short-lived backend-signed SDK tokens.
-    Keep this endpoint behind trusted server access only.
-    """
-    claims: Dict[str, Any] = {
-        "sub": request.sub,
-        "scopes": request.scopes,
-    }
-    if request.email:
-        claims["email"] = request.email
-    if request.organization_id:
-        claims["organization_id"] = request.organization_id
-    session_id = _create_or_update_session(request.sub, request.organization_id, request.session_id)
-    claims["sid"] = session_id
-    claims["jti"] = str(uuid.uuid4())
-    claims.update(request.extra_claims or {})
-
-    token = _create_sdk_token(claims, ttl_seconds=request.ttl_seconds)
-    return {
-        "token": token,
-        "token_type": "Bearer",
-        "session_id": session_id,
-        "expires_in": request.ttl_seconds,
-        "audience": SDK_TOKEN_AUDIENCE,
-        "issuer": SDK_TOKEN_ISSUER,
-    }
 
 
 @router.post("/api/v1/sdk/auth/client-sessions")
