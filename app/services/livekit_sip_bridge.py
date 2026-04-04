@@ -140,9 +140,7 @@ class LiveKitSIPBridge:
     async def make_outbound_call(self, 
                                phone_number: str,
                                room_name: str,
-                               participant_name: Optional[str] = None,
-                               user_id: Optional[str] = None,
-                               organization_id: Optional[str] = None) -> Dict[str, Any]:
+                               participant_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Initiate outbound SIP call to phone number
         """
@@ -340,9 +338,6 @@ class SIPBridgeAPI:
         """
         phone_number = request_data.get("phone_number")
         room_name = request_data.get("room_name", f"call-{phone_number}-{int(datetime.utcnow().timestamp())}")
-        participant_name = request_data.get("participant_name")
-        user_id = request_data.get("user_id")
-        organization_id = request_data.get("organization_id")
         
         if not phone_number:
             raise ValueError("Phone number is required")
@@ -354,10 +349,7 @@ class SIPBridgeAPI:
             # Make outbound call
             call_result = await self.sip_bridge.make_outbound_call(
                 phone_number=phone_number,
-                room_name=room_name,
-                participant_name=participant_name,
-                user_id=user_id,
-                organization_id=organization_id,
+                room_name=room_name
             )
             
             # Generate token for WebRTC client

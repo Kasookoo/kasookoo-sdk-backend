@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "kasookoo-sdk-backend-complete",
 		"name": "Kasookoo SDK Backend - Complete API Collection",
-		"description": "Complete API collection for Kasookoo SDK Backend including Authentication, WebRTC, SIP, Notifications, and Monitoring endpoints",
+		"description": "Complete API collection for Kasookoo SDK Backend including Authentication, WebRTC, SDK SIP (LiveKit bridge at /api/v1/bot/sdk-sip), Notifications, and Monitoring endpoints. SIP routes calls/make, calls/end, rooms/token, and sip/trunks require a Kasookoo SDK JWT (collection variable sdk_access_token). calls/dial and calls/hangup use STATIC_API_KEY (static_api_key).",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "kasookoo-sdk"
 	},
@@ -10,6 +10,45 @@
 		{
 			"name": "Authentication",
 			"item": [
+				{
+					"name": "Create Client Session (SDK JWT)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"try {",
+									"    var j = pm.response.json();",
+									"    if (j && j.token) {",
+									"        pm.collectionVariables.set('sdk_access_token', j.token);",
+									"        console.log('Saved token to sdk_access_token');",
+									"    }",
+									"} catch (e) { console.warn(e); }"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sub\": \"postman_test_user\",\n  \"organization_id\": null,\n  \"email\": \"test@example.com\",\n  \"scopes\": [\"webrtc:token:create\"],\n  \"ttl_seconds\": 3600\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sdk/auth/client-sessions",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sdk", "auth", "client-sessions"]
+						},
+						"description": "Obtain a Kasookoo SDK JWT. On success, the Tests script stores the token in collection variable sdk_access_token for SIP and other JWT-protected routes."
+					}
+				},
 				{
 					"name": "Get Access Token (Deprecated)",
 					"request": {
@@ -49,7 +88,7 @@
 					}
 				}
 			],
-			"description": "Authentication endpoints"
+			"description": "Authentication endpoints. Use Create Client Session to populate sdk_access_token for JWT-protected APIs (including most SDK SIP routes)."
 		},
 		{
 			"name": "WebRTC - Call Management",
@@ -359,7 +398,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -367,11 +406,11 @@
 							"raw": "{\n  \"phone_number\": \"+1234567890\",\n  \"room_name\": \"sip_call_123\",\n  \"participant_name\": \"John Doe\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/calls/make",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/make",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "make"]
+							"path": ["api", "v1", "bot", "sdk-sip", "calls", "make"]
 						},
-						"description": "Initiate an outbound SIP call"
+						"description": "Initiate an outbound SIP call. Requires Kasookoo SDK JWT (Authorization: Bearer {{sdk_access_token}}). Run Authentication > Create Client Session first, or paste a token into the sdk_access_token collection variable."
 					}
 				},
 				{
@@ -393,11 +432,11 @@
 							"raw": "{\n  \"phone_number\": \"+1234567890\",\n  \"room_name\": \"sip_call_123\",\n  \"participant_name\": \"John Doe\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/calls/dial",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/dial",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "dial"]
+							"path": ["api", "v1", "bot", "sdk-sip", "calls", "dial"]
 						},
-						"description": "Initiate an outbound SIP call (alternative endpoint)"
+						"description": "Initiate an outbound SIP call (server-to-server). Uses STATIC_API_KEY (static_api_key), not the SDK JWT."
 					}
 				},
 				{
@@ -411,7 +450,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -419,11 +458,11 @@
 							"raw": "{\n  \"participant_identity\": \"user123\",\n  \"room_name\": \"sip_call_123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/calls/end",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/end",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "end"]
+							"path": ["api", "v1", "bot", "sdk-sip", "calls", "end"]
 						},
-						"description": "End an active SIP call"
+						"description": "End an active SIP call. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
 				},
 				{
@@ -445,15 +484,15 @@
 							"raw": "{\n  \"participant_identity\": \"user123\",\n  \"room_name\": \"sip_call_123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/calls/hangup",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/hangup",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "hangup"]
+							"path": ["api", "v1", "bot", "sdk-sip", "calls", "hangup"]
 						},
-						"description": "End an active SIP call (alternative endpoint)"
+						"description": "End an active SIP call (server-to-server). Uses STATIC_API_KEY (static_api_key), not the SDK JWT."
 					}
 				}
 			],
-			"description": "SIP call management endpoints"
+			"description": "SDK SIP call management (/api/v1/bot/sdk-sip). make and end use SDK JWT; dial and hangup use static API key."
 		},
 		{
 			"name": "SIP - Room & Token Management",
@@ -469,7 +508,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -477,11 +516,11 @@
 							"raw": "{\n  \"room_name\": \"sip_call_123\",\n  \"participant_identity\": \"user123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/rooms/token",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/rooms/token",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "rooms", "token"]
+							"path": ["api", "v1", "bot", "sdk-sip", "rooms", "token"]
 						},
-						"description": "Generate access token for joining a SIP room"
+						"description": "Generate LiveKit access token for joining a SIP room. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
 				},
 				{
@@ -491,19 +530,19 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/sip/trunks",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/sip/trunks",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "sip", "trunks"]
+							"path": ["api", "v1", "bot", "sdk-sip", "sip", "trunks"]
 						},
-						"description": "List all configured SIP trunks"
+						"description": "List configured SIP trunks. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
 				}
 			],
-			"description": "SIP room and token management endpoints"
+			"description": "SDK SIP room and token helpers. Both requests require SDK JWT."
 		},
 		{
 			"name": "SIP - System & Health",
@@ -514,11 +553,11 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/health",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/health",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "health"]
+							"path": ["api", "v1", "bot", "sdk-sip", "health"]
 						},
-						"description": "Health check endpoint for SIP bridge"
+						"description": "Health check for the SDK SIP bridge. No authentication."
 					}
 				},
 				{
@@ -527,11 +566,11 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip"]
+							"path": ["api", "v1", "bot", "sdk-sip"]
 						},
-						"description": "Root endpoint with API information"
+						"description": "SDK SIP API index (route list). No authentication."
 					}
 				},
 				{
@@ -553,15 +592,15 @@
 							"raw": "{\n  \"event\": \"participant_joined\",\n  \"room\": {\n    \"name\": \"sip_call_123\",\n    \"sid\": \"RM_abc123\"\n  },\n  \"participant\": {\n    \"identity\": \"user123\",\n    \"name\": \"John Doe\",\n    \"sid\": \"PA_xyz789\"\n  }\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/sip/livekit-events",
+							"raw": "{{base_url}}/api/v1/bot/sdk-sip/livekit-events",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "livekit-events"]
+							"path": ["api", "v1", "bot", "sdk-sip", "livekit-events"]
 						},
-						"description": "Handle LiveKit events for SIP calls"
+						"description": "LiveKit webhook receiver for SIP (Authorization must match LiveKit webhook signing; set livekit_webhook_auth). Body in Postman is illustrative; LiveKit sends signed payloads."
 					}
 				}
 			],
-			"description": "SIP system and health check endpoints"
+			"description": "SDK SIP system routes: health and root are open; LiveKit webhook uses LiveKit authorization header."
 		},
 		{
 			"name": "Notifications - Device Token Management",
@@ -731,6 +770,11 @@
 		{
 			"key": "ws_url",
 			"value": "ws://localhost:7000",
+			"type": "string"
+		},
+		{
+			"key": "sdk_access_token",
+			"value": "",
 			"type": "string"
 		},
 		{
