@@ -1,0 +1,768 @@
+{
+	"info": {
+		"_postman_id": "kasookoo-sdk-backend-complete",
+		"name": "Kasookoo SDK Backend - Complete API Collection",
+		"description": "Complete API collection for Kasookoo SDK Backend including Authentication, WebRTC, SIP, Notifications, and Monitoring endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "kasookoo-sdk"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Get Access Token (Deprecated)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "grant_type",
+									"value": "password",
+									"description": "OAuth2 grant type"
+								},
+								{
+									"key": "username",
+									"value": "fairmoney",
+									"description": "Username for authentication"
+								},
+								{
+									"key": "password",
+									"value": "@@FairmonyKasookoo123456",
+									"description": "Password for authentication"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/token",
+							"host": ["{{base_url}}"],
+							"path": ["token"]
+						},
+						"description": "Login to get JWT access token (Deprecated - use static API key instead)"
+					}
+				}
+			],
+			"description": "Authentication endpoints"
+		},
+		{
+			"name": "WebRTC - Call Management",
+			"item": [
+				{
+					"name": "Get Caller Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"participant_identity\": \"caller_user_123\",\n  \"participant_identity_name\": \"John Doe\",\n  \"participant_identity_type\": \"caller\",\n  \"room_name\": \"call_room_123\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/get-caller-token",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "get-caller-token"]
+						},
+						"description": "Generate LiveKit access token for caller and initiate call session"
+					}
+				},
+				{
+					"name": "Get Called Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"participant_identity\": \"called_user_456\",\n  \"participant_identity_name\": \"Jane Smith\",\n  \"participant_identity_type\": \"customer\",\n  \"room_name\": \"call_room_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"is_call_recording\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/get-called-token",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "get-called-token"]
+						},
+						"description": "Generate LiveKit access token for called user"
+					}
+				},
+				{
+					"name": "End Call",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/calls/{{room_name}}/end",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "calls", "{{room_name}}", "end"]
+						},
+						"description": "End an active call session"
+					}
+				},
+				{
+					"name": "Get Call Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/calls/{{room_name}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "calls", "{{room_name}}", "status"]
+						},
+						"description": "Get current call status and recording information"
+					}
+				},
+				{
+					"name": "List Call Sessions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/call/sessions?search={{search_term}}&skip=0&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "call", "sessions"],
+							"query": [
+								{
+									"key": "search",
+									"value": "{{search_term}}",
+									"description": "Search by room_name, caller_id, or callee_id"
+								},
+								{
+									"key": "skip",
+									"value": "0",
+									"description": "Number of records to skip"
+								},
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Max records to return"
+								}
+							]
+						},
+						"description": "List call sessions with search and pagination"
+					}
+				},
+				{
+					"name": "List Active Calls",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/calls",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "calls"]
+						},
+						"description": "List all active calls"
+					}
+				},
+				{
+					"name": "Reject Call",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"participant_identity\": \"called_user_456\",\n  \"participant_identity_name\": \"Jane Smith\",\n  \"participant_identity_type\": \"customer\",\n  \"room_name\": \"call_room_123\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/calls/reject",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "calls", "reject"]
+						},
+						"description": "Reject an incoming call"
+					}
+				}
+			],
+			"description": "WebRTC call management endpoints"
+		},
+		{
+			"name": "WebRTC - Recording Management",
+			"item": [
+				{
+					"name": "Start Standalone Recording",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_name\": \"call_room_123\",\n  \"recording_type\": \"composite\",\n  \"options\": {\n    \"width\": 1920,\n    \"height\": 1080,\n    \"framerate\": 30,\n    \"layout\": \"grid\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/recordings/start",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "recordings", "start"]
+						},
+						"description": "Start recording without call context (standalone recording)"
+					}
+				},
+				{
+					"name": "Get Recording Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/recordings/{{egress_id}}/status?room_name={{room_name}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "recordings", "{{egress_id}}", "status"],
+							"query": [
+								{
+									"key": "room_name",
+									"value": "{{room_name}}",
+									"description": "Room name (optional)"
+								}
+							]
+						},
+						"description": "Get recording status and information"
+					}
+				},
+				{
+					"name": "Stop Standalone Recording",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/recordings/{{egress_id}}/stop",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "recordings", "{{egress_id}}", "stop"]
+						},
+						"description": "Stop a standalone recording"
+					}
+				},
+				{
+					"name": "Download Recording",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/download-recording/{{room_name}}/{{file_name}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "download-recording", "{{room_name}}", "{{file_name}}"]
+						},
+						"description": "Download a recorded call file"
+					}
+				}
+			],
+			"description": "WebRTC recording management endpoints"
+		},
+		{
+			"name": "WebRTC - Webhooks",
+			"item": [
+				{
+					"name": "LiveKit Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"event\": \"participant_joined\",\n  \"room\": {\n    \"name\": \"call_room_123\",\n    \"sid\": \"RM_abc123\"\n  },\n  \"participant\": {\n    \"identity\": \"user123\",\n    \"name\": \"John Doe\",\n    \"sid\": \"PA_xyz789\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/webhooks/livekit",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "webrtc", "webhooks", "livekit"]
+						},
+						"description": "Handle LiveKit webhook events"
+					}
+				}
+			],
+			"description": "WebRTC webhook endpoints"
+		},
+		{
+			"name": "SIP - Call Management",
+			"item": [
+				{
+					"name": "Make Outbound Call",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone_number\": \"+1234567890\",\n  \"room_name\": \"sip_call_123\",\n  \"participant_name\": \"John Doe\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/calls/make",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "calls", "make"]
+						},
+						"description": "Initiate an outbound SIP call"
+					}
+				},
+				{
+					"name": "Dial Outbound Call",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone_number\": \"+1234567890\",\n  \"room_name\": \"sip_call_123\",\n  \"participant_name\": \"John Doe\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/calls/dial",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "calls", "dial"]
+						},
+						"description": "Initiate an outbound SIP call (alternative endpoint)"
+					}
+				},
+				{
+					"name": "End SIP Call",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"participant_identity\": \"user123\",\n  \"room_name\": \"sip_call_123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/calls/end",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "calls", "end"]
+						},
+						"description": "End an active SIP call"
+					}
+				},
+				{
+					"name": "Hangup SIP Call",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"participant_identity\": \"user123\",\n  \"room_name\": \"sip_call_123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/calls/hangup",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "calls", "hangup"]
+						},
+						"description": "End an active SIP call (alternative endpoint)"
+					}
+				}
+			],
+			"description": "SIP call management endpoints"
+		},
+		{
+			"name": "SIP - Room & Token Management",
+			"item": [
+				{
+					"name": "Generate Room Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_name\": \"sip_call_123\",\n  \"participant_identity\": \"user123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/rooms/token",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "rooms", "token"]
+						},
+						"description": "Generate access token for joining a SIP room"
+					}
+				},
+				{
+					"name": "List SIP Trunks",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/sip/trunks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "sip", "trunks"]
+						},
+						"description": "List all configured SIP trunks"
+					}
+				}
+			],
+			"description": "SIP room and token management endpoints"
+		},
+		{
+			"name": "SIP - System & Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/health",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "health"]
+						},
+						"description": "Health check endpoint for SIP bridge"
+					}
+				},
+				{
+					"name": "Root Endpoint",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip"]
+						},
+						"description": "Root endpoint with API information"
+					}
+				},
+				{
+					"name": "LiveKit Events Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "{{livekit_webhook_auth}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"event\": \"participant_joined\",\n  \"room\": {\n    \"name\": \"sip_call_123\",\n    \"sid\": \"RM_abc123\"\n  },\n  \"participant\": {\n    \"identity\": \"user123\",\n    \"name\": \"John Doe\",\n    \"sid\": \"PA_xyz789\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/sip/livekit-events",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "sip", "livekit-events"]
+						},
+						"description": "Handle LiveKit events for SIP calls"
+					}
+				}
+			],
+			"description": "SIP system and health check endpoints"
+		},
+		{
+			"name": "Notifications - Device Token Management",
+			"item": [
+				{
+					"name": "Register Device Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"user_id\": \"user_123\",\n  \"user_type\": \"driver\",\n  \"device_token\": \"fcm_device_token_here\",\n  \"device_type\": \"android\",\n  \"new_device_token\": \"new_fcm_token_optional\",\n  \"device_info\": {\n    \"app_version\": \"1.0.0\",\n    \"os_version\": \"13.0\",\n    \"device_model\": \"Samsung Galaxy S21\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/notifications/register-token",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "register-token"]
+						},
+						"description": "Register a device token for push notifications"
+					}
+				},
+				{
+					"name": "Update Device Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"user_id\": \"user_123\",\n  \"user_type\": \"driver\",\n  \"device_token\": \"old_fcm_device_token\",\n  \"device_type\": \"android\",\n  \"new_device_token\": \"new_fcm_device_token\",\n  \"device_info\": {\n    \"app_version\": \"1.0.1\",\n    \"os_version\": \"13.1\",\n    \"device_model\": \"Samsung Galaxy S21\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/notifications/update-token",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "update-token"]
+						},
+						"description": "Update an existing device token for push notifications"
+					}
+				},
+				{
+					"name": "Unregister Device Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{static_api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"user_id\": \"user_123\",\n  \"user_type\": \"driver\",\n  \"device_token\": \"fcm_device_token_to_remove\",\n  \"device_type\": \"android\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/notifications/unregister-token",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "unregister-token"]
+						},
+						"description": "Unregister a device token to stop receiving push notifications"
+					}
+				}
+			],
+			"description": "Device token management for push notifications"
+		},
+		{
+			"name": "Monitoring - Prometheus & System Metrics",
+			"item": [
+				{
+					"name": "Prometheus Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/monitoring/metrics",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "monitoring", "metrics"]
+						},
+						"description": "Get Prometheus metrics in Prometheus format for scraping"
+					}
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/monitoring/health",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "monitoring", "health"]
+						},
+						"description": "Basic health check endpoint"
+					}
+				},
+				{
+					"name": "System Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/monitoring/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "monitoring", "status"]
+						},
+						"description": "Detailed system status with comprehensive metrics in JSON format"
+					}
+				},
+				{
+					"name": "Metrics JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/monitoring/metrics/json",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "monitoring", "metrics", "json"]
+						},
+						"description": "Get metrics in JSON format for programmatic access"
+					}
+				}
+			],
+			"description": "Monitoring endpoints for Prometheus metrics and system monitoring"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [""]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [""]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:7000",
+			"type": "string"
+		},
+		{
+			"key": "ws_url",
+			"value": "ws://localhost:7000",
+			"type": "string"
+		},
+		{
+			"key": "static_api_key",
+			"value": "17537c5618b70cefe382dc33a39178010e7e24873f3897609d346a85",
+			"type": "string"
+		},
+		{
+			"key": "room_name",
+			"value": "call_room_123",
+			"type": "string"
+		},
+		{
+			"key": "egress_id",
+			"value": "EG_abc123",
+			"type": "string"
+		},
+		{
+			"key": "file_name",
+			"value": "recording_20231201_120000",
+			"type": "string"
+		},
+		{
+			"key": "search_term",
+			"value": "call_room",
+			"type": "string"
+		},
+		{
+			"key": "livekit_webhook_auth",
+			"value": "your_livekit_webhook_auth_here",
+			"type": "string"
+		}
+	]
+}
+

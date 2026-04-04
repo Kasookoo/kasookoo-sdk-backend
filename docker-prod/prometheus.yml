@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "kasookoo-sdk-backend"
+    environment: "production"
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "kasookoo-sdk-backend"
+    scrape_interval: 15s
+    metrics_path: "/api/v1/monitoring/metrics"
+    static_configs:
+      - targets: ["host.docker.internal:7000"]
+        labels:
+          service: "kasookoo-sdk-backend"

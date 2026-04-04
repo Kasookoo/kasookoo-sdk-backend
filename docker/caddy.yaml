@@ -1,0 +1,36 @@
+logging:
+  logs:
+    default:
+      level: INFO
+storage:
+  module: file_system
+  root: /data
+apps:
+  tls:
+    certificates:
+      automate:
+        - inapp-test.kasookoo.ai
+        - inapp-turn-test.kasookoo.ai
+        - inapp-whip-test.kasookoo.ai
+        - sdk-test.kasookoo.ai
+        - monitoring-test.kasookoo.ai
+  http:
+    servers:
+      main_http:
+        listen: [":443"]
+        protocols: ["h1", "h2"]
+        routes:
+          - match:
+              - host: ["sdk-test.kasookoo.ai"]
+            handle:
+              - handler: reverse_proxy
+                upstreams:
+                  - dial: "localhost:7000"
+            terminal: true
+          - match:
+              - host: ["monitoring-test.kasookoo.ai"]
+            handle:
+              - handler: reverse_proxy
+                upstreams:
+                  - dial: "localhost:3000"
+            terminal: true

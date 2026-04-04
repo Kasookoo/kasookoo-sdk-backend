@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kasookoo-api-caddy-config
+data:
+  caddy.yaml: |
+    logging:
+      logs:
+        default:
+          level: INFO
+    storage:
+      module: file_system
+      root: /data
+    apps:
+      tls:
+        certificates:
+          automate:
+            - api-test.example.com
+      http:
+        servers:
+          kasookoo_api:
+            listen: [":80", ":443"]
+            protocols: ["h1", "h2"]
+            routes:
+              - match:
+                  - host: ["api-test.example.com"]
+                handle:
+                  - handler: reverse_proxy
+                    upstreams:
+                      - dial: "kasookoo-sdk-backend:8000"
+                    headers:
+                      request:
+                        set:
+                          X-Forwarded-Proto: ["https"]
+                          X-Forwarded-For: ["{http.request.remote.host}"]
+                          X-Real-IP: ["{http.request.remote.host}"]
+                          Host: ["{http.request.host}"]
+                terminal: true

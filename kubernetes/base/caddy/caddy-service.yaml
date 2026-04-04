@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kasookoo-api-caddy
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: kasookoo-api-caddy
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP

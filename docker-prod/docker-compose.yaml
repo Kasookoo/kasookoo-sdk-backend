@@ -1,0 +1,116 @@
+# Production host-network compose for SDK backend stack
+services:
+  caddy:
+    image: livekit/caddyl4
+    command: run --config /etc/caddy.yaml --adapter yaml
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - ./caddy.yaml:/etc/caddy.yaml
+      - ./caddy_data:/data
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server /etc/redis.conf
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - ./redis.conf:/etc/redis.conf
+
+  egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    environment:
+      - EGRESS_CONFIG_FILE=/etc/egress.yaml
+    network_mode: "host"
+    volumes:
+      - ./egress.yaml:/etc/egress.yaml
+    cap_add:
+      - CAP_SYS_ADMIN
+
+  ingress:
+    image: livekit/ingress:latest
+    restart: unless-stopped
+    environment:
+      - INGRESS_CONFIG_FILE=/etc/ingress.yaml
+    network_mode: "host"
+    volumes:
+      - ./ingress.yaml:/etc/ingress.yaml
+
+  kasookoo-sdk-backend:
+    build:
+      context: /usr/share/kasookoo-sdk-backend
+      dockerfile: Dockerfile
+    container_name: kasookoo-sdk-backend
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - DB_NAME=${DB_NAME}
+      - LIVEKIT_SDK_URL=${LIVEKIT_SDK_URL}
+      - LIVEKIT_SDK_API_KEY=${LIVEKIT_SDK_API_KEY}
+      - LIVEKIT_SDK_API_SECRET=${LIVEKIT_SDK_API_SECRET}
+      - FIREBASE_CREDENTIALS_PATH=/app/app/credentials/firebase-service-account.json
+    volumes:
+      - /usr/share/kasookoo-sdk-backend/app/credentials:/app/app/credentials:ro
+      - /usr/share/kasookoo-sdk-backend/log:/app/log
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /usr/share/kasookoo-sdk-backend/log:/app/sdk-log:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  loki_data:

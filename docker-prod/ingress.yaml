@@ -1,0 +1,12 @@
+redis:
+  address: localhost:6379
+  username: ""
+  password: ""
+  db: 0
+  use_tls: false
+api_key: APIDnfJj67ghFUY
+api_secret: dhSrBCmoKmy0l8GhItHCklqDwAaNneZJXPiLZEcnsJT
+ws_url: wss://inapp.kasookoo.ai
+rtmp_port: 1935
+whip_port: 8080
+http_relay_port: 9090

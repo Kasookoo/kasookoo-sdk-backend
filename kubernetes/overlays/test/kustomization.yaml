@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kasookoo-test
+
+resources:
+  - ../../base
+
+patches:
+  - path: patch-deployment.yaml
+  - path: patch-hpa.yaml
+  - path: patch-caddy-configmap.yaml

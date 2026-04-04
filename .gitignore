@@ -1,0 +1,48 @@
+# IDE and Editor files
+/.vscode/
+/.venv/
+/venv/
+/.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environment files
+/.env
+*.env
+.env.local
+
+# Logs
+/log/
+*.log
+
+# Virtual environments
+venv/
+.venv/
+
+# Server management files
+server.log
+server.pid
+
+# Firebase credentials
+app/credentials/firebase-service-account.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

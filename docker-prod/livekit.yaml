@@ -1,0 +1,33 @@
+port: 7880
+bind_addresses:
+  - ""
+prometheus:
+  port: 7890
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+  node_ip: 18.233.115.209
+  enable_loopback_candidate: false
+redis:
+  address: localhost:6379
+  username: ""
+  password: ""
+  db: 0
+  use_tls: false
+turn:
+  enabled: true
+  domain: inapp-turn.kasookoo.ai
+  tls_port: 5349
+  udp_port: 3478
+  external_tls: true
+ingress:
+  rtmp_base_url: rtmp://inapp.kasookoo.ai:1935/x
+  whip_base_url: https://inapp-whip.kasookoo.ai/w
+keys:
+  APIDnfJj67ghFUY: dhSrBCmoKmy0l8GhItHCklqDwAaNneZJXPiLZEcnsJT
+webhook:
+  api_key: APIDnfJj67ghFUY
+  urls:
+    - https://sdk.kasookoo.ai/api/v1/sdk/webhooks/livekit

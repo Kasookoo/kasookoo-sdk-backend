@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kasookoo-api-caddy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kasookoo-api-caddy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kasookoo-api-caddy
+    spec:
+      containers:
+        - name: caddy
+          image: livekit/caddyl4:latest
+          args:
+            - run
+            - --config
+            - /etc/caddy.yaml
+            - --adapter
+            - yaml
+          ports:
+            - name: http
+              containerPort: 80
+            - name: https
+              containerPort: 443
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy.yaml
+              subPath: caddy.yaml
+            - name: caddy-data
+              mountPath: /data
+      volumes:
+        - name: caddy-config
+          configMap:
+            name: kasookoo-api-caddy-config
+        - name: caddy-data
+          emptyDir: {}
