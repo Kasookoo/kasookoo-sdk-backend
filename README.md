@@ -520,42 +520,42 @@ This diagram covers **how the app gets its first session token** and **how that 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant FE as Frontend App (SDK Consumer)
+    participant FE as Frontend App
     participant SDK as Kasookoo Frontend SDK
     participant KB as Kasookoo SDK Backend API
-    participant AUTH as Auth Depends (intercept_sdk_access)
-    participant DB as MongoDB (sdk_auth_sessions)
-    participant JWKS as /.well-known/jwks.json
+    participant AUTH as Auth Depends intercept_sdk_access
+    participant DB as MongoDB sdk_auth_sessions
+    participant JWKS as JWKS well-known
 
     Note over FE,KB: No end-user login required in SDK flow
 
-    FE->>SDK: init({ publishableKey, ... })
-    SDK->>KB: POST /api/v1/sdk/auth/client-sessions
-    Note right of SDK: Body: sub, organization_id, scopes, ttl_seconds
-    KB->>KB: Validate requested scopes against SDK_PUBLIC_ALLOWED_SCOPES
-    KB->>DB: Upsert session (sid, sub, org, active=true)
-    KB-->>SDK: { token, session_id, expires_in }
+    FE->>SDK: init publishableKey
+    SDK->>KB: POST client-sessions
+    Note right of SDK: Body with sub org scopes ttl
+    KB->>KB: Validate scopes SDK_PUBLIC_ALLOWED_SCOPES
+    KB->>DB: Upsert session sid sub org active
+    KB-->>SDK: token session_id expires_in
 
-    Note over SDK,AUTH: Protected routes: Depends() runs before the route handler (Spring-style interceptor)
-    SDK->>KB: HTTP request + Authorization: Bearer <JWT with sid>
-    KB->>AUTH: FastAPI resolves Depends(intercept_sdk_access) first
-    AUTH->>AUTH: Verify JWT signature (RS256 / HS256), exp/iat/aud/iss/sub/sid
-    AUTH->>DB: Verify sid is active and belongs to sub
-    AUTH->>AUTH: Enforce required scopes for this route
-    opt External verifier only (optional clients)
-      SDK->>JWKS: GET /.well-known/jwks.json
-      JWKS-->>SDK: RS256 public keys (kid)
+    Note over SDK,AUTH: Depends runs before route handler
+    SDK->>KB: HTTP Bearer JWT with sid
+    KB->>AUTH: FastAPI Depends intercept_sdk_access first
+    AUTH->>AUTH: Verify JWT RS256 HS256 claims
+    AUTH->>DB: Verify sid active for sub
+    AUTH->>AUTH: Enforce required scopes
+    opt External JWKS optional
+      SDK->>JWKS: GET well-known jwks
+      JWKS-->>SDK: RS256 public keys
     end
 
     alt Auth dependency succeeds
-        AUTH-->>KB: Principal OK — route handler runs
-        KB->>KB: Business logic (e.g. issue LiveKit token, org checks if needed)
-        KB-->>SDK: 200 Success + API response
+        AUTH-->>KB: Principal OK handler runs
+        KB->>KB: Business logic LiveKit org checks
+        KB-->>SDK: 200 API response
         SDK-->>FE: Result
     else Auth dependency fails
-        AUTH-->>KB: 401/403 (handler not executed)
+        AUTH-->>KB: 401 or 403 handler skipped
         KB-->>SDK: Error response
-        SDK->>KB: Refresh token / new client-sessions
+        SDK->>KB: Refresh or new client-sessions
     end
 ```
 
@@ -579,28 +579,28 @@ sequenceDiagram
     autonumber
     participant SDK as Kasookoo Frontend SDK
     participant KB as Kasookoo Backend Auth API
-    participant AUTH as Auth Depends (get_sdk_principal)
-    participant DB as MongoDB (sdk_auth_sessions)
+    participant AUTH as Auth Depends get_sdk_principal
+    participant DB as MongoDB sdk_auth_sessions
 
-    SDK->>KB: POST /api/v1/sdk/auth/sessions/{sid}/tokens (Bearer currentToken)
-    KB->>AUTH: Depends runs first: validate JWT + session
-    AUTH->>AUTH: Decode/verify JWT; path sid matches token sid
-    AUTH->>DB: Check sid is active and owned by sub
+    SDK->>KB: POST sessions sid tokens Bearer
+    KB->>AUTH: Depends validate JWT and session
+    AUTH->>AUTH: Decode JWT path sid matches token sid
+    AUTH->>DB: Check sid active owned by sub
     alt session active
-        AUTH-->>KB: Principal OK — handler runs
-        KB->>KB: Mint new short-lived token (same sid, new jti)
-        KB-->>SDK: { token, session_id, expires_in }
-    else session revoked/not found
+        AUTH-->>KB: Principal OK handler runs
+        KB->>KB: Mint new token same sid new jti
+        KB-->>SDK: token session_id expires_in
+    else session revoked or missing
         AUTH-->>KB: Fail
         KB-->>SDK: 401 Session revoked or not found
     end
 
-    SDK->>KB: DELETE /api/v1/sdk/auth/sessions/{sid} (Bearer currentToken)
-    KB->>AUTH: Depends: validate JWT + session ownership
+    SDK->>KB: DELETE sessions sid Bearer
+    KB->>AUTH: Depends validate JWT ownership
     AUTH->>DB: Confirm sid matches principal
-    AUTH-->>KB: OK — revoke handler runs
-    KB->>DB: Set active=false for sid
-    KB-->>SDK: { message: "Session revoked" }
+    AUTH-->>KB: OK revoke handler runs
+    KB->>DB: Set active false for sid
+    KB-->>SDK: Session revoked message
 ```
 
 **What this diagram shows (step by step):**
