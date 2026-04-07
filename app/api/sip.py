@@ -130,15 +130,15 @@ def send_push_notification(device_token, room_name, caller_name):
     )
 
 
-@router.post("/sdk-sip/calls/make", response_model=CallStatusResponse)
-@monitor("api.sdksip.make_outbound_call")
+@router.post("/sip/calls/make", response_model=CallStatusResponse)
+@monitor("api.sip.make_outbound_call")
 async def make_outbound_call(request: MakeCallRequest, token: str = Depends(sdk_token_scheme)):
     await authenticate_token(token)
     return await sip_outbound_call(request)
 
 
-@router.post("/sdk-sip/calls/dial", response_model=CallStatusResponse)
-@monitor("api.sdksip.dial_outbound_call")
+@router.post("/sip/calls/dial", response_model=CallStatusResponse)
+@monitor("api.sip.dial_outbound_call")
 async def dial_outbound_call(request: MakeCallRequest, _token: str = Depends(authenticate_static_token)):
     return await sip_outbound_call(request)
 
