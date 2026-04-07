@@ -96,7 +96,7 @@ async def startup_event():
         print(f"Failed to initialize SIP bridge: {e}")
 
 @router.post("/sip/livekit-events")
-@monitor_api("api.v1.sip.livekit-events")
+@monitor("api.sip.livekit-events")
 async def receive_livekit_webhook(request: Request, authorization: str = Header(None)):
     body = await request.body()
 
