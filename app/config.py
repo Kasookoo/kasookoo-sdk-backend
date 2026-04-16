@@ -55,6 +55,13 @@ SIP_OUTBOUND_PASSWORD = os.getenv("SIP_OUTBOUND_PASSWORD", "password")
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME")
 
+# Redis Settings (cache layer for user/org lookups)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_USER_CACHE_PREFIX = os.getenv("REDIS_USER_CACHE_PREFIX", "user")
+REDIS_USER_CACHE_TTL_SECONDS = int(os.getenv("REDIS_USER_CACHE_TTL_SECONDS", "120"))
+REDIS_ORG_CACHE_PREFIX = os.getenv("REDIS_ORG_CACHE_PREFIX", "org")
+REDIS_ORG_CACHE_TTL_SECONDS = int(os.getenv("REDIS_ORG_CACHE_TTL_SECONDS", "300"))
+
 # Clerk Settings
 CLERK_ISSUER = os.getenv("CLERK_ISSUER", "https://superb-snake-55.clerk.accounts.dev")
 CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY", "sk_test_Hs4ttrG4qcRZFaWDFGNxlo089NiEeNsG7Irvxf864k")  # Clerk backend API key

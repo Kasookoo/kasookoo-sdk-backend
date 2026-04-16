@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant FE as Frontend App
+    participant API as SDK Backend API
+    participant Auth as Auth Depends
+    participant Redis as Redis
+    participant Mongo as MongoDB
+
+    FE->>API: POST /api/v1/sdk/auth/client-sessions
+    API->>Mongo: Upsert sdk_auth_sessions(sid, sub, org, active=true)
+    API->>Redis: Cache session metadata (optional)
+    API-->>FE: token + session_id + expires_in
+
+    FE->>API: Request protected endpoint with Bearer token
+    API->>Auth: Validate token + scopes + sid
+    Auth->>Redis: Lookup cached session
+    alt Cache hit
+      Redis-->>Auth: session active
+    else Cache miss
+      Auth->>Mongo: Validate sdk_auth_sessions sid/sub/active
+      Mongo-->>Auth: session record
+      Auth->>Redis: Set session cache
+    end
+    Auth-->>API: principal accepted
+    API-->>FE: 200 OK
+
+    FE->>API: DELETE /api/v1/sdk/auth/sessions/{sid}
+    API->>Mongo: set active=false
+    API->>Redis: delete session cache
+    API-->>FE: revoked

@@ -1,0 +1,50 @@
+flowchart TB
+    U[Clients] --> DNS[DNS and WAF] --> LB[Regional Load Balancer]
+
+    subgraph Edge[Edge Layer]
+      E1[Ingress or Caddy A]
+      E2[Ingress or Caddy B]
+    end
+    LB --> E1
+    LB --> E2
+
+    subgraph App[Stateless API Layer]
+      A1[SDK Backend Pod 1]
+      A2[SDK Backend Pod 2]
+      AN[SDK Backend Pod N]
+    end
+    E1 --> A1
+    E1 --> A2
+    E2 --> A2
+    E2 --> AN
+
+    subgraph Data[Data Layer]
+      RC[(Redis HA Cluster)]
+      MP[(Mongo Primary)]
+      MR[(Mongo Replicas or Shards)]
+    end
+    A1 <--> RC
+    A2 <--> RC
+    AN <--> RC
+    A1 --> MP
+    A2 --> MP
+    AN --> MP
+    MP --- MR
+
+    subgraph Realtime[Realtime Layer]
+      LKLB[LiveKit Front Door]
+      LK1[LiveKit Node 1]
+      LK2[LiveKit Node 2]
+      SIP1[SIP Service 1]
+      SIP2[SIP Service 2]
+      Egress[Egress Worker Pool]
+    end
+    A1 --> LKLB
+    A2 --> LKLB
+    AN --> LKLB
+    LKLB --> LK1
+    LKLB --> LK2
+    LK1 --> SIP1
+    LK2 --> SIP2
+    LK1 --> Egress
+    LK2 --> Egress

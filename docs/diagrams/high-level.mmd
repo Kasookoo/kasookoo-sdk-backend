@@ -1,0 +1,62 @@
+flowchart TB
+    FE[Browser and Mobile Apps]
+    SDK[Kasookoo Frontend SDK]
+    Caddy[Caddy or API Gateway]
+
+    subgraph App[Kasookoo SDK Backend]
+      API[FastAPI API Layer]
+      Auth[SDK Auth and Session APIs]
+      Security[Depends Interceptor and Scope Guards]
+      CallMgr[Call Manager]
+      SIPBridge[LiveKit SIP Bridge]
+      TokenSvc[LiveKit Token Service]
+      MsgSvc[Messaging Service]
+      NotifSvc[Notification Service]
+      AssocSvc[Associated Number Service]
+      UserSvc[User Service]
+      OrgSvc[Organization Service]
+    end
+
+    Mongo[(MongoDB)]
+    Redis[(Redis Cache)]
+
+    subgraph LiveKit[LiveKit Stack]
+      LK[LiveKit Server]
+      SIP[LiveKit SIP]
+      Egress[LiveKit Egress]
+    end
+
+    S3[AWS S3]
+    FCM[Firebase FCM]
+    SIPNET[SIP Trunk Provider]
+
+    FE --> Caddy
+    SDK --> Caddy
+    Caddy --> API
+
+    API --> Security
+    API --> Auth
+    API --> CallMgr
+    API --> SIPBridge
+    API --> TokenSvc
+    API --> MsgSvc
+    API --> NotifSvc
+    API --> AssocSvc
+    API --> UserSvc
+    API --> OrgSvc
+
+    Auth --> Mongo
+    Auth <--> Redis
+    UserSvc --> Mongo
+    UserSvc <--> Redis
+    OrgSvc --> Mongo
+    OrgSvc <--> Redis
+    MsgSvc --> Mongo
+    CallMgr --> Mongo
+
+    CallMgr --> LK
+    SIPBridge --> SIP
+    SIP --> SIPNET
+    LK --> Egress
+    Egress --> S3
+    NotifSvc --> FCM

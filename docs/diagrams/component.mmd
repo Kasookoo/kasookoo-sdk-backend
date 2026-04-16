@@ -1,0 +1,63 @@
+flowchart TB
+    MAIN[app/main.py]
+
+    subgraph API[app/api]
+      A_AUTH[auth.py]
+      A_WRTC[webrtc.py]
+      A_SIP[sip.py]
+      A_MSG[messaging.py]
+      A_CDR[cdr.py]
+      A_DASH[dashboard.py]
+      A_NOTIF[notification.py]
+      A_ASSOC[associated_numbers.py]
+      A_MON[monitoring.py]
+    end
+
+    subgraph SEC[Security]
+      INTERCEPT[app/security/interceptor.py]
+    end
+
+    subgraph SVC[app/services]
+      CALLMGR[call_manager.py]
+      TOKENSVC[token_service.py]
+      RECSVC[recording_manager.py]
+      MSGSVC[messaging_service.py]
+      NOTIFSVC[notification_service.py]
+      ASSOCSVC[associated_number_service.py]
+      USERSVC[user_service.py]
+      ORGSVC[organization_service.py]
+      SIPSVC[livekit_sip_bridge.py]
+    end
+
+    DB[(MongoDB)]
+    CACHE[(Redis)]
+    LIVEKIT[LiveKit]
+
+    MAIN --> API
+    A_WRTC --> INTERCEPT
+    A_MSG --> INTERCEPT
+    A_AUTH --> TOKENSVC
+
+    A_WRTC --> CALLMGR
+    A_WRTC --> RECSVC
+    A_SIP --> SIPSVC
+    A_MSG --> MSGSVC
+    A_NOTIF --> NOTIFSVC
+    A_ASSOC --> ASSOCSVC
+    A_CDR --> CALLMGR
+    A_DASH --> USERSVC
+    A_DASH --> ORGSVC
+
+    USERSVC --> DB
+    ORGSVC --> DB
+    MSGSVC --> DB
+    CALLMGR --> DB
+    A_AUTH --> DB
+
+    USERSVC <--> CACHE
+    ORGSVC <--> CACHE
+    A_AUTH <--> CACHE
+
+    CALLMGR --> LIVEKIT
+    RECSVC --> LIVEKIT
+    SIPSVC --> LIVEKIT

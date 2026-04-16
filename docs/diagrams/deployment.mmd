@@ -1,0 +1,27 @@
+flowchart TB
+    Internet[(Internet)]
+    Clients[Frontend Clients]
+
+    subgraph Host[Host VM or Kubernetes Node]
+      Proxy[Caddy or Ingress]
+      API[Kasookoo SDK Backend :7000]
+      Redis[(Redis :6379)]
+      Prom[Prometheus]
+      Grafana[Grafana]
+    end
+
+    Mongo[(MongoDB / Atlas)]
+    LiveKit[LiveKit Cluster]
+    S3[(AWS S3)]
+    FCM[Firebase]
+    SIP[SIP Trunk Provider]
+
+    Clients --> Internet --> Proxy --> API
+    API --> Redis
+    API --> Mongo
+    API --> LiveKit
+    API --> FCM
+    API --> S3
+    LiveKit --> SIP
+    API --> Prom
+    Grafana --> Prom
