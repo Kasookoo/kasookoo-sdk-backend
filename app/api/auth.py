@@ -10,6 +10,7 @@ import logging
 from pymongo import MongoClient
 from pydantic import BaseModel, Field
 from app.config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
     ALGORITHM,
     DB_NAME,
     JWT_PRIVATE_KEY,
@@ -22,7 +23,6 @@ from app.config import (
     SDK_TOKEN_AUDIENCE,
     SDK_TOKEN_ISSUER,
     SDK_TOKEN_LEEWAY_SECONDS,
-    STATIC_API_KEY,
 )
 
 load_dotenv(dotenv_path=".env.local")
@@ -128,6 +128,17 @@ class CreateClientSessionRequest(BaseModel):
     extra_claims: Dict[str, Any] = Field(default_factory=dict, description="Optional extra claims (non-security)")
 
 
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    phone_number: Optional[str] = None
+    clerk_id: Optional[str] = None
+    first_name: str
+    last_name: str
+    role: str
+    organization_id: Optional[str] = None
+
+
 def _create_sdk_token(payload: Dict[str, Any], ttl_seconds: int) -> str:
     now = datetime.now(timezone.utc)
     to_encode = dict(payload)
@@ -169,18 +180,28 @@ def _validate_public_scopes(requested_scopes: List[str]) -> List[str]:
     return requested
 
 
-async def authenticate_token(token: str) -> str:
-    """Validate backend-signed SDK token and return subject."""
-    payload = _decode_sdk_token(token)
-    return str(payload.get("sub"))
+def create_access_token(data: Dict[str, Any]) -> str:
+    """Short-lived SDK-signed JWT (same mechanism as client-sessions)."""
+    return _create_sdk_token(data, ttl_seconds=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+
+
+oauth2_scheme = sdk_token_scheme
 
 
 async def normal_authenticate_token(token: str) -> Tuple[str, str, Dict[str, Any]]:
-    """Compatibility helper returning (subject, email, payload)."""
+    """Decode SDK access token; returns (sub, email, payload)."""
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing token")
     payload = _decode_sdk_token(token)
     subject = str(payload.get("sub"))
     email = str(payload.get("email") or payload.get("sub") or subject)
     return subject, email, payload
+
+
+async def authenticate_token(token: str) -> str:
+    """Return authenticated principal id (`sub` from SDK token)."""
+    subject, _, _ = await normal_authenticate_token(token)
+    return subject
 
 
 def _extract_scopes(payload: Dict[str, Any]) -> List[str]:
@@ -260,20 +281,6 @@ def get_organization_id(
     if not org_id:
         raise HTTPException(status_code=400, detail="Missing organization_id")
     return str(org_id)
-    
-
-
-def authenticate_static_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    Authenticate using static API key from environment variable
-    """
-    if not credentials or credentials.credentials != STATIC_API_KEY:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid API key",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return credentials.credentials
 
 
 @router.post("/api/v1/sdk/auth/client-sessions")
@@ -368,12 +375,3 @@ async def revoke_sdk_session(
         session["updated_at"] = int(datetime.now(timezone.utc).timestamp())
 
     return {"message": "Session revoked", "session_id": session_id}
-
-def get_static_api_key():
-    """
-    Dependency for static API key authentication
-    Returns the API key if valid, raises HTTPException if invalid
-    """
-    return authenticate_static_token
-
-

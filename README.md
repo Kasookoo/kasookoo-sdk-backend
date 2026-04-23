@@ -10,7 +10,7 @@ A comprehensive WebRTC and SIP calling backend service built with FastAPI, LiveK
 - **Call Recording** - Record calls with LiveKit integration
 - **Real-time Updates** - WebSocket support for live call status
 - **Push Notifications** - Firebase Cloud Messaging integration
-- **Token Management** - JWT and static API key authentication
+- **Token Management** - Backend-signed SDK JWT (`client-sessions`) for all API authentication
 
 ### API Capabilities
 - Generate LiveKit access tokens for participants
@@ -194,8 +194,8 @@ SDK_TOKEN_LEEWAY_SECONDS=15
 SDK_SESSION_DURATION_SECONDS=60
 SDK_PUBLIC_ALLOWED_SCOPES=webrtc:token:create,webrtc:call:read,webrtc:call:end,messaging:token:create,messaging:send,recording:start,recording:read,recording:stop
 
-# Static API Key (default test key)
-STATIC_API_KEY=17537c5618b70cefe382dc33a39178010e7e24873f3897609d346a85
+# Optional: outbound HTTP only (e.g. notification proxy to another service). Not used to authenticate callers to this API.
+STATIC_API_KEY=replace-if-needed
 
 # LiveKit Settings (replace with your actual values)
 LIVEKIT_API_KEY=your-livekit-api-key
@@ -411,7 +411,7 @@ See `POSTMAN_COLLECTION_README.md` for detailed usage instructions.
 - `GET /api/v1/sdk/auth/introspect` - Inspect validated SDK token (debug)
 - `GET /.well-known/jwks.json` - Public key set for RS256 token verification
 - `POST /api/v1/sdk/auth/client-sessions` - Create frontend SDK session directly from Kasookoo backend
-- `POST /api/v1/sdk/auth/sessions/{session_id}/tokens` - Refresh short-lived SDK token
+- `POST /api/v1/sdk/auth/sessions/{session_id}/tokens` - Mint a new short-lived SDK JWT for the same `session_id` (`sid` in token)
 - `DELETE /api/v1/sdk/auth/sessions/{session_id}` - Revoke current session
 
 Session state is now persisted in MongoDB collection `sdk_auth_sessions` (falls back to in-memory only if Mongo is unavailable during startup).
@@ -433,9 +433,9 @@ Session state is now persisted in MongoDB collection `sdk_auth_sessions` (falls 
 
 ### SIP - SIP Call Management
 - `POST /api/v1/sip/calls/make` - Make SIP call (JWT auth)
-- `POST /api/v1/sip/calls/dial` - Make SIP call (API key auth)
+- `POST /api/v1/sip/calls/dial` - Make SIP call (SDK JWT auth)
 - `POST /api/v1/sip/calls/end` - End SIP call (JWT auth)
-- `POST /api/v1/sip/calls/hangup` - End SIP call (API key auth)
+- `POST /api/v1/sip/calls/hangup` - End SIP call (SDK JWT auth)
 
 ### WebSocket & Webhooks
 - `WS /api/v1/webrtc/ws/calls/{room_name}` - WebSocket connection
@@ -444,7 +444,7 @@ Session state is now persisted in MongoDB collection `sdk_auth_sessions` (falls 
 
 ## 🔐 Authentication
 
-The API supports direct first-party SDK authentication and static API-key auth for selected server routes (SIP, internal proxies, etc.):
+**Callers authenticate only with a backend-signed SDK JWT** in `Authorization: Bearer <token>`. Tokens are minted by this service via **`POST /api/v1/sdk/auth/client-sessions`** (short TTL, e.g. 60 seconds). There is **no** separate refresh-token or static API key for accessing these APIs.
 
 ### Request pipeline (Spring Boot–style “interceptor”)
 
@@ -457,8 +457,8 @@ For SDK JWT routes, use helpers in `app/security/interceptor.py`:
 
 Handlers should rely on the injected principal from these dependencies instead of decoding the JWT again. WebRTC routes use this pattern.
 
-### 1. Kasookoo Backend-Signed SDK Token (recommended for frontend SDK)
-Frontend must not sign tokens. The Kasookoo SDK backend now issues short-lived JWTs directly via `POST /api/v1/sdk/auth/client-sessions`.
+### Backend-signed SDK JWT (only supported client auth)
+The frontend **must not** sign API JWTs itself. This backend issues short-lived JWTs via **`POST /api/v1/sdk/auth/client-sessions`**. Re-mint on expiry (same endpoint) or optionally rotate in place with **`POST /api/v1/sdk/auth/sessions/{sid}/tokens`** (see next diagram).
 
 ```bash
 Authorization: Bearer <sdk_signed_jwt>
@@ -473,14 +473,7 @@ Expected JWT claims:
 - `organization_id` or `org_id` (required for org-scoped endpoints)
 - `scopes` or `scope` (recommended)
 
-### 2. Static API Key Authentication
-Used for specific endpoints that are intentionally API-key protected (not for minting SDK JWTs; use `client-sessions` for that).
-
-```bash
-Authorization: Bearer <STATIC_API_KEY>
-```
-
-### Frontend SDK Token Fetch Pattern (no integrator backend)
+### Frontend SDK token fetch (no separate login service)
 
 ```javascript
 // frontend
@@ -513,9 +506,9 @@ async function callKasookooApi(payload) {
 }
 ```
 
-### Backend-Signed SDK Token Flow (Sequence Diagram)
+### Session token: mint and use (sequence diagram)
 
-This diagram covers **how the app gets its first session token** and **how that token is used** on protected APIs. It pairs with **Session Refresh & Revoke** below, which handles token rotation and logout after a session exists.
+**First session JWT** (`client-sessions`) and **using it** on protected APIs. When `exp` is near, call **`client-sessions` again** (new `sid`) or use **optional session rotation** in the next diagram—there is **no OAuth-style refresh token**.
 
 ```mermaid
 sequenceDiagram
@@ -555,7 +548,7 @@ sequenceDiagram
     else Auth dependency fails
         AUTH-->>KB: 401 or 403 handler skipped
         KB-->>SDK: Error response
-        SDK->>KB: Refresh or new client-sessions
+        SDK->>KB: New client-sessions or POST sessions sid tokens
     end
 ```
 
@@ -570,9 +563,9 @@ sequenceDiagram
 - Optionally, external clients may fetch **`GET /.well-known/jwks.json`** to verify RS256 signatures offline; this server verifies using configured keys inside the **Auth Depends** step.
 - The interceptor step verifies the JWT (signature, time claims, audience/issuer if configured, **`sub`**, **`sid`**), confirms the session is **active** in the DB and matches **`sub`**, and enforces **required scopes** (and org headers where applicable).
 - If the dependency chain succeeds, the handler returns **200** and the SDK surfaces the result to the app.
-- If it fails, the client gets **401/403** and the business handler does **not** run; the SDK should **refresh** (next diagram) or call **`client-sessions`** again.
+- If it fails, the client gets **401/403** and the business handler does **not** run; the SDK should call **`client-sessions` again** (new JWT + new `sid`) or **`POST .../sessions/{sid}/tokens`** if it still holds a valid session (next diagram).
 
-### Session Refresh & Revoke Flow (Sequence Diagram)
+### Optional: same-session JWT rotation and revoke (sequence diagram)
 
 ```mermaid
 sequenceDiagram
@@ -605,14 +598,14 @@ sequenceDiagram
 
 **What this diagram shows (step by step):**
 
-- **Refresh:** The SDK calls **`POST /api/v1/sdk/auth/sessions/{sid}/tokens`** with the **current** JWT in `Authorization: Bearer ...`. The path **`{sid}`** must match the **`sid`** inside the token.
+- **Rotate JWT (same `sid`):** The SDK calls **`POST /api/v1/sdk/auth/sessions/{sid}/tokens`** with the **current** JWT in `Authorization: Bearer ...`. The path **`{sid}`** must match the **`sid`** inside the token. This mints a **new** short-lived JWT; it is **not** a refresh-token grant.
 - **Auth Depends (`get_sdk_principal`)** runs **before** the refresh logic: decode/verify JWT, ensure **`sid`** matches the path, and check **`sdk_auth_sessions`** for an **active** session owned by **`sub`**.
 - If that dependency succeeds, the route handler **mints** a **new** JWT with the **same** `sid`, a new **`jti`**, and returns `token`, `session_id`, and `expires_in`.
 - If the session was revoked or missing, the dependency fails and the API returns **401** (“Session revoked or not found”) **without** minting.
 - **Revoke (logout):** The SDK calls **`DELETE /api/v1/sdk/auth/sessions/{sid}`** with the current Bearer token. The same **Auth Depends** step validates the token first; then the handler sets **`active=false`** for that `sid` so existing JWTs stop working on the next request.
 - The API confirms revocation with a short JSON message. After revoke, the client must use **`client-sessions`** again (first diagram) to obtain a **new** session if the user continues using the app.
 
-**How the two diagrams connect:** Diagram 1 **creates** `sid` and the first `token`. Diagram 2 **reuses** that `sid` to **rotate** the JWT (refresh) or **end** the session (revoke). Business API calls in Diagram 1 always use the latest valid token from either `client-sessions` or a successful refresh.
+**How the two diagrams connect:** Diagram 1 **creates** `sid` and the first `token`. Diagram 2 **reuses** that `sid` to **rotate** the JWT in place or **end** the session (revoke). Business API calls in Diagram 1 always use the latest valid JWT from **`client-sessions`** or, if you use sessions, from **`POST .../sessions/{sid}/tokens`**.
 
 ### Minimum Scopes by Endpoint
 

@@ -12,7 +12,9 @@ from app.api import (
     messaging,
     monitoring,
     notification,
+    organization,
     sip,
+    users,
     webrtc,
 )
 from app.config import *
@@ -49,6 +51,8 @@ app.include_router(messaging.router, prefix="/api/v1", tags=["messaging"])
 app.include_router(associated_numbers.router, prefix="/api/v1", tags=["associated_numbers"])
 app.include_router(cdr.router, prefix="/api/v1", tags=["cdr"])
 app.include_router(dashboard.router, prefix="/api/v1", tags=["dashboard"])
+app.include_router(organization.router, prefix="/api/v1", tags=["organization"])
+app.include_router(users.router, prefix="/api/v1", tags=["users"])
 app.include_router(monitoring.router, prefix="/api/v1/monitoring", tags=["monitoring"])
 
 if __name__ == "__main__":

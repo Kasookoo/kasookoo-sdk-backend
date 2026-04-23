@@ -12,7 +12,11 @@ SDK_SIGNING_SECRET = os.getenv("SDK_SIGNING_SECRET", "")
 SDK_TOKEN_AUDIENCE = os.getenv("SDK_TOKEN_AUDIENCE", "kasookoo-sdk-backend")
 SDK_TOKEN_ISSUER = os.getenv("SDK_TOKEN_ISSUER", "")
 SDK_TOKEN_LEEWAY_SECONDS = int(os.getenv("SDK_TOKEN_LEEWAY_SECONDS", "15"))
+# Short-lived SDK JWTs: frontend mints a new token on each interval (no refresh-token flow).
 SDK_SESSION_DURATION_SECONDS = int(os.getenv("SDK_SESSION_DURATION_SECONDS", "60"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1"))
+# Used by optional Clerk helper token helpers (HS256 with caller-provided secret)
+BOT_JWT_ALGORITHM = "HS256"
 SDK_PUBLIC_ALLOWED_SCOPES = [
     scope.strip()
     for scope in os.getenv(
@@ -61,6 +65,7 @@ REDIS_USER_CACHE_PREFIX = os.getenv("REDIS_USER_CACHE_PREFIX", "user")
 REDIS_USER_CACHE_TTL_SECONDS = int(os.getenv("REDIS_USER_CACHE_TTL_SECONDS", "120"))
 REDIS_ORG_CACHE_PREFIX = os.getenv("REDIS_ORG_CACHE_PREFIX", "org")
 REDIS_ORG_CACHE_TTL_SECONDS = int(os.getenv("REDIS_ORG_CACHE_TTL_SECONDS", "300"))
+REDIS_SESSION_PREFIX = os.getenv("REDIS_SESSION_PREFIX", "session")
 
 # Clerk Settings
 CLERK_ISSUER = os.getenv("CLERK_ISSUER", "https://superb-snake-55.clerk.accounts.dev")

@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "kasookoo-sdk-backend-complete",
 		"name": "Kasookoo SDK Backend - Complete API Collection",
-		"description": "Complete API collection for Kasookoo SDK Backend including Authentication, WebRTC, SDK SIP (LiveKit bridge at /api/v1/bot/sdk-sip), Notifications, and Monitoring endpoints. SIP routes calls/make, calls/end, rooms/token, and sip/trunks require a Kasookoo SDK JWT (collection variable sdk_access_token). calls/dial and calls/hangup use STATIC_API_KEY (static_api_key).",
+		"description": "Complete API collection for Kasookoo SDK Backend including Authentication, WebRTC, SDK SIP (LiveKit bridge at /api/v1/sip), Notifications, and Monitoring endpoints. SIP routes calls/make, calls/end, rooms/token, and sip/trunks require a Kasookoo SDK JWT (collection variable sdk_access_token). calls/dial and calls/hangup use STATIC_API_KEY (static_api_key).",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "kasookoo-sdk"
 	},
@@ -192,9 +192,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/v1/webrtc/call/sessions?search={{search_term}}&skip=0&limit=10",
+							"raw": "{{base_url}}/api/v1/webrtc/calls/debug?search={{search_term}}&skip=0&limit=10",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "call", "sessions"],
+							"path": ["api", "v1", "webrtc", "calls", "debug"],
 							"query": [
 								{
 									"key": "search",
@@ -406,9 +406,9 @@
 							"raw": "{\n  \"phone_number\": \"+1234567890\",\n  \"room_name\": \"sip_call_123\",\n  \"participant_name\": \"John Doe\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/make",
+							"raw": "{{base_url}}/api/v1/sip/calls/make",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "calls", "make"]
+							"path": ["api", "v1", "sip", "calls", "make"]
 						},
 						"description": "Initiate an outbound SIP call. Requires Kasookoo SDK JWT (Authorization: Bearer {{sdk_access_token}}). Run Authentication > Create Client Session first, or paste a token into the sdk_access_token collection variable."
 					}
@@ -432,9 +432,9 @@
 							"raw": "{\n  \"phone_number\": \"+1234567890\",\n  \"room_name\": \"sip_call_123\",\n  \"participant_name\": \"John Doe\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/dial",
+							"raw": "{{base_url}}/api/v1/sip/calls/dial",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "calls", "dial"]
+							"path": ["api", "v1", "sip", "calls", "dial"]
 						},
 						"description": "Initiate an outbound SIP call (server-to-server). Uses STATIC_API_KEY (static_api_key), not the SDK JWT."
 					}
@@ -458,9 +458,9 @@
 							"raw": "{\n  \"participant_identity\": \"user123\",\n  \"room_name\": \"sip_call_123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/end",
+							"raw": "{{base_url}}/api/v1/sip/calls/end",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "calls", "end"]
+							"path": ["api", "v1", "sip", "calls", "end"]
 						},
 						"description": "End an active SIP call. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
@@ -484,15 +484,15 @@
 							"raw": "{\n  \"participant_identity\": \"user123\",\n  \"room_name\": \"sip_call_123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/calls/hangup",
+							"raw": "{{base_url}}/api/v1/sip/calls/hangup",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "calls", "hangup"]
+							"path": ["api", "v1", "sip", "calls", "hangup"]
 						},
 						"description": "End an active SIP call (server-to-server). Uses STATIC_API_KEY (static_api_key), not the SDK JWT."
 					}
 				}
 			],
-			"description": "SDK SIP call management (/api/v1/bot/sdk-sip). make and end use SDK JWT; dial and hangup use static API key."
+			"description": "SDK SIP call management (/api/v1/sip). make and end use SDK JWT; dial and hangup use static API key."
 		},
 		{
 			"name": "SIP - Room & Token Management",
@@ -516,9 +516,9 @@
 							"raw": "{\n  \"room_name\": \"sip_call_123\",\n  \"participant_identity\": \"user123\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/rooms/token",
+							"raw": "{{base_url}}/api/v1/sip/rooms/token",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "rooms", "token"]
+							"path": ["api", "v1", "sip", "rooms", "token"]
 						},
 						"description": "Generate LiveKit access token for joining a SIP room. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
@@ -534,9 +534,9 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/sip/trunks",
+							"raw": "{{base_url}}/api/v1/sip/sip/trunks",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "sip", "trunks"]
+							"path": ["api", "v1", "sip", "sip", "trunks"]
 						},
 						"description": "List configured SIP trunks. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
@@ -553,9 +553,9 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/health",
+							"raw": "{{base_url}}/api/v1/sip/health",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "health"]
+							"path": ["api", "v1", "sip", "health"]
 						},
 						"description": "Health check for the SDK SIP bridge. No authentication."
 					}
@@ -566,9 +566,9 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip",
+							"raw": "{{base_url}}/api/v1/sip",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip"]
+							"path": ["api", "v1", "sip"]
 						},
 						"description": "SDK SIP API index (route list). No authentication."
 					}
@@ -592,9 +592,9 @@
 							"raw": "{\n  \"event\": \"participant_joined\",\n  \"room\": {\n    \"name\": \"sip_call_123\",\n    \"sid\": \"RM_abc123\"\n  },\n  \"participant\": {\n    \"identity\": \"user123\",\n    \"name\": \"John Doe\",\n    \"sid\": \"PA_xyz789\"\n  }\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/v1/bot/sdk-sip/livekit-events",
+							"raw": "{{base_url}}/api/v1/sip/livekit-events",
 							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "bot", "sdk-sip", "livekit-events"]
+							"path": ["api", "v1", "sip", "livekit-events"]
 						},
 						"description": "LiveKit webhook receiver for SIP (Authorization must match LiveKit webhook signing; set livekit_webhook_auth). Body in Postman is illustrative; LiveKit sends signed payloads."
 					}
@@ -624,9 +624,9 @@
 							"raw": "{\n  \"user_id\": \"user_123\",\n  \"user_type\": \"driver\",\n  \"device_token\": \"fcm_device_token_here\",\n  \"device_type\": \"android\",\n  \"new_device_token\": \"new_fcm_token_optional\",\n  \"device_info\": {\n    \"app_version\": \"1.0.0\",\n    \"os_version\": \"13.0\",\n    \"device_model\": \"Samsung Galaxy S21\"\n  }\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/notifications/register-token",
+							"raw": "{{base_url}}/api/v1/notifications/register-token",
 							"host": ["{{base_url}}"],
-							"path": ["notifications", "register-token"]
+							"path": ["api", "v1", "notifications", "register-token"]
 						},
 						"description": "Register a device token for push notifications"
 					}
@@ -650,9 +650,9 @@
 							"raw": "{\n  \"user_id\": \"user_123\",\n  \"user_type\": \"driver\",\n  \"device_token\": \"old_fcm_device_token\",\n  \"device_type\": \"android\",\n  \"new_device_token\": \"new_fcm_device_token\",\n  \"device_info\": {\n    \"app_version\": \"1.0.1\",\n    \"os_version\": \"13.1\",\n    \"device_model\": \"Samsung Galaxy S21\"\n  }\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/notifications/update-token",
+							"raw": "{{base_url}}/api/v1/notifications/update-token",
 							"host": ["{{base_url}}"],
-							"path": ["notifications", "update-token"]
+							"path": ["api", "v1", "notifications", "update-token"]
 						},
 						"description": "Update an existing device token for push notifications"
 					}
@@ -676,9 +676,9 @@
 							"raw": "{\n  \"user_id\": \"user_123\",\n  \"user_type\": \"driver\",\n  \"device_token\": \"fcm_device_token_to_remove\",\n  \"device_type\": \"android\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/notifications/unregister-token",
+							"raw": "{{base_url}}/api/v1/notifications/unregister-token",
 							"host": ["{{base_url}}"],
-							"path": ["notifications", "unregister-token"]
+							"path": ["api", "v1", "notifications", "unregister-token"]
 						},
 						"description": "Unregister a device token to stop receiving push notifications"
 					}

@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from livekit.api import webhook, TokenVerifier
 from app.services import get_sip_bridge
 
-from app.api.auth import authenticate_static_token, sdk_token_scheme, authenticate_token
+from app.api.auth import sdk_token_scheme, authenticate_token
 from app.utils.performance_monitor import monitor
 
 
@@ -139,7 +139,8 @@ async def make_outbound_call(request: MakeCallRequest, token: str = Depends(sdk_
 
 @router.post("/sip/calls/dial", response_model=CallStatusResponse)
 @monitor("api.sip.dial_outbound_call")
-async def dial_outbound_call(request: MakeCallRequest, _token: str = Depends(authenticate_static_token)):
+async def dial_outbound_call(request: MakeCallRequest, token: str = Depends(sdk_token_scheme)):
+    await authenticate_token(token)
     return await sip_outbound_call(request)
 
 
@@ -189,7 +190,8 @@ async def end_call(request: EndCallRequest, token: str = Depends(sdk_token_schem
 
 @router.post("/sip/calls/hangup", response_model=CallStatusResponse)
 @monitor("api.sdksip.hangup_call")
-async def hangup_call(request: EndCallRequest, _token: str = Depends(authenticate_static_token)):
+async def hangup_call(request: EndCallRequest, token: str = Depends(sdk_token_scheme)):
+    await authenticate_token(token)
     return await end_sip_call(request)
 
 

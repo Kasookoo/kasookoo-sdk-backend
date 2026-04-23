@@ -4,6 +4,172 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from enum import Enum
 
+
+# --- Organization (multi-tenant) ---
+class SipOutboundTrunkSettings(BaseModel):
+    """Outbound SIP trunk configuration for an organization. Stored in organization.settings.sip_outbound_trunk."""
+    name: Optional[str] = Field(None, description="Trunk display name (e.g. My trunk)")
+    address: Optional[str] = Field(None, description="SIP provider address (e.g. sip.telnyx.com)")
+    auth_username: Optional[str] = Field(None, description="SIP auth username")
+    auth_password: Optional[str] = Field(None, description="SIP auth password")
+    numbers: Optional[List[str]] = Field(None, description="E.164 numbers the trunk can use (e.g. ['+12135550100'])")
+    trunk_id: Optional[str] = Field(None, description="LiveKit SIP trunk ID after creation; can be set manually if trunk created in dashboard")
+
+
+class SipInboundTrunkSettings(BaseModel):
+    """Inbound SIP trunk configuration for an organization. Stored in organization.settings.sip_inbound_trunk."""
+    name: Optional[str] = Field(None, description="Trunk display name (e.g. My inbound trunk)")
+    numbers: Optional[List[str]] = Field(
+        None,
+        description="E.164 numbers accepted by this trunk (e.g. ['+15105550100']). Empty list means accept any number (requires allowed_addresses or auth).",
+    )
+    allowed_addresses: Optional[List[str]] = Field(
+        None,
+        description="Allowed SIP provider IPs/addresses for inbound calls (provider-dependent).",
+    )
+    allowed_numbers: Optional[List[str]] = Field(
+        None,
+        description="Allowed caller phone numbers (E.164). If set, only calls from these numbers are accepted.",
+    )
+    auth_username: Optional[str] = Field(None, description="Inbound trunk auth username (if your SIP provider supports it)")
+    auth_password: Optional[str] = Field(None, description="Inbound trunk auth password (if your SIP provider supports it)")
+    krisp_enabled: Optional[bool] = Field(None, description="Enable Krisp noise cancellation for inbound calls")
+    metadata: Optional[str] = Field(None, description="Optional trunk metadata")
+    trunk_id: Optional[str] = Field(None, description="LiveKit SIP trunk ID after creation; can be set manually if trunk created in dashboard")
+
+
+class OrganizationSettings(BaseModel):
+    """Organization settings. Stored as sub-document under organization.settings in DB."""
+    show_user_list: str = Field(
+        "agent_customer_list",
+        description="When 'agent_customer_list', filter_users API returns the user list; when 'all_user_list', returns all user list.",
+    )
+    sip_outbound_trunk: Optional[SipOutboundTrunkSettings] = Field(
+        None,
+        description="Outbound SIP trunk configuration for this organization; used by make_outbound_call when organization_id is set.",
+    )
+    sip_inbound_trunk: Optional[SipInboundTrunkSettings] = Field(
+        None,
+        description="Inbound SIP trunk configuration for this organization; used for accepting inbound calls via a SIP provider.",
+    )
+    contact_center_number: Optional[str] = Field(
+        None,
+        description="Default/contact center phone number for this organization. Used when no phone_number is provided (e.g. dial). Takes priority over DEFAULT_PHONE_NUMBER from .env.",
+    )
+
+
+class OrganizationBase(BaseModel):
+    name: str = Field(..., description="Organization display name")
+    slug: str = Field(..., description="Unique slug/code for the organization")
+    email: Optional[str] = Field(None, description="Organization contact email")
+    phone_number: Optional[str] = Field(None, description="Organization contact phone number")
+
+
+class OrganizationCreate(OrganizationBase):
+    """Create organization request; can include settings (e.g. sip_outbound_trunk) to store in DB."""
+    settings: Optional[OrganizationSettings] = Field(None, description="Organization settings including optional sip_outbound_trunk")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "Acme Corp",
+                "slug": "acme-corp",
+                "email": "contact@acme.com",
+                "phone_number": "+12135551234",
+                "settings": {
+                    "show_user_list": "same_user_list",
+                    "contact_center_number": "+12135559999",
+                    "sip_outbound_trunk": {
+                        "name": "My trunk",
+                        "address": "sip.telnyx.com",
+                        "auth_username": "<username>",
+                        "auth_password": "<password>",
+                        "numbers": ["+12135550100"]
+                    }
+                }
+            }
+        }
+
+
+class OrganizationUpdate(BaseModel):
+    """Partial update; only provided fields are updated."""
+    name: Optional[str] = Field(None, description="Organization display name")
+    slug: Optional[str] = Field(None, description="Unique slug/code for the organization")
+    email: Optional[str] = Field(None, description="Organization contact email")
+    phone_number: Optional[str] = Field(None, description="Organization contact phone number")
+    settings: Optional[OrganizationSettings] = Field(None, description="Organization settings")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "name": "Updated Org Name",
+                "slug": "updated-slug",
+                "email": "updated@example.com",
+                "phone_number": None,
+                "settings": {
+                    "show_user_list": "same_user_list",
+                    "contact_center_number": "+12135559999",
+                    "sip_outbound_trunk": {
+                        "name": "My trunk",
+                        "address": "sip.telnyx.com",
+                        "auth_username": "<username>",
+                        "auth_password": "<password>",
+                        "numbers": ["+12135550100"],
+                        "trunk_id": "ST_xxxx"
+                    }
+                }
+            }
+        }
+
+
+class OrganizationResponse(OrganizationBase):
+    id: str = Field(..., description="Organization ID")
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    settings: Optional[OrganizationSettings] = None
+
+    class Config:
+        from_attributes = True
+
+
+class OrganizationSignupRequest(BaseModel):
+    """Request body for organization signup: creates a new org and its first admin user."""
+    organization_name: str = Field(..., description="Organization display name")
+    organization_slug: str = Field(..., description="Unique slug for the organization (e.g. acme-corp)")
+    organization_email: Optional[str] = Field(None, description="Organization contact email")
+    organization_phone_number: Optional[str] = Field(None, description="Organization contact phone")
+    organization_settings: Optional[OrganizationSettings] = Field(None, description="Organization settings (e.g. sip_outbound_trunk) to store")
+    admin_email: str = Field(..., description="Admin user email (used for login)")
+    admin_password: str = Field(..., description="Admin user password (plain or SHA-256 hex digest)")
+    admin_first_name: str = Field(..., description="Admin user first name")
+    admin_last_name: str = Field(..., description="Admin user last name")
+    admin_phone_number: Optional[str] = Field(None, description="Admin user phone number")
+
+
+class AssociatedNumberBase(BaseModel):
+    phone_number: str = Field(..., description="Inbound trunk phone number in E.164 format")
+    user_id: str = Field(..., description="Mapped user ID who should receive incoming WebRTC call")
+    label: Optional[str] = Field(None, description="Optional display label for this number mapping")
+    is_active: bool = Field(True, description="Whether this mapping is active")
+
+
+class AssociatedNumberCreate(AssociatedNumberBase):
+    pass
+
+
+class AssociatedNumberUpdate(BaseModel):
+    phone_number: Optional[str] = None
+    user_id: Optional[str] = None
+    label: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AssociatedNumberResponse(AssociatedNumberBase):
+    id: str
+    organization_id: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
 class CallStatus(str, Enum):
     WAITING = "waiting"
     ACTIVE = "active"
@@ -25,7 +191,62 @@ class ParticipantType(str, Enum):
     RECORDER = "recorder"
     ADMIN = "admin"
     CUSTOMER = "customer"
-    DRIVER="driver"
+    DRIVER = "driver"
+
+# --- Define the request data model for validation ---
+class ConnectCallersRequest(BaseModel):
+    sip_uri1: str
+    sip_uri2: str
+
+# --- Define the request data model ---
+class TokenRequest(BaseModel):
+    room_name: str
+    participant_identity: str
+    participant_identity_name: Optional[str] = None
+    participant_identity_type: Optional[str] = None
+
+class CallerTokenRequest(TokenRequest):
+    caller_user_id: Optional[str] = None
+    called_user_id: Optional[str] = None
+    device_type: Optional[str] = None
+    is_push_notification: bool = True
+    is_call_recording: Optional[bool] = True
+
+
+class AnonymousCallerTokenRequest(BaseModel):
+    """Request for call tokens when the caller is anonymous (not in user DB); callee must exist in user table."""
+    room_name: str = Field(..., description="LiveKit room name")
+    participant_identity: str = Field(..., description="Anonymous caller identity (e.g. session or device id)")
+    participant_identity_name: Optional[str] = Field("Anonymous", description="Display name for the anonymous caller")
+    participant_identity_type: Optional[str] = Field("caller", description="Participant type for the caller")
+    called_user_id: Optional[str] = Field(None, description="User ID of the callee. If not provided, uses organization's anonymous_guest_call_admin_email to resolve admin user.")
+    device_type: Optional[str] = None
+    is_push_notification: bool = True
+    is_call_recording: Optional[bool] = True
+
+class CalledTokenRequest(TokenRequest):
+    called_user_id: Optional[str] = None
+    is_call_recording: Optional[bool] = True
+
+
+class RejectCallTokenRequest(TokenRequest):
+    caller_user_id: str
+    called_user_id: str
+
+class MessagingTokenRequest(TokenRequest):
+    sender_user_id: str = Field(..., description="User ID of the message sender")
+    receiver_user_id: str = Field(..., description="User ID of the message receiver")
+    device_type: Optional[str] = None
+    is_push_notification: bool = True
+
+class TokenResponse(BaseModel):
+    accessToken: str
+    wsUrl: str
+
+class CallerTokenResponse(BaseModel):
+    """Response model for get-caller-token endpoint with both caller and called tokens"""
+    caller: TokenResponse = Field(..., description="Caller's LiveKit access token")
+    called: TokenResponse = Field(..., description="Called participant's LiveKit access token")
 
 # Request Models
 class CallRequest(BaseModel):
@@ -149,8 +370,8 @@ class CallEndResponse(BaseModel):
 
 class ActiveCallInfo(BaseModel):
     room_name: str
-    caller_id: str
-    callee_id: str
+    caller_participant: Dict[str, Any]
+    callee_participant: Dict[str, Any]
     status: str
     recording_status: str
     created_at: str
@@ -177,123 +398,63 @@ class ErrorResponse(BaseModel):
     code: Optional[str] = Field(None, description="Error code")
     details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
 
-# --- Define the request data model for validation ---
-class ConnectCallersRequest(BaseModel):
-    sip_uri1: str
-    sip_uri2: str
-
-
-class CallerTokenRequest(TokenRequest):
-    caller_user_id: Optional[str] = None
-    called_user_id: Optional[str] = None
-    device_type: Optional[str] = None
-    is_push_notification: bool = True
-    is_call_recording: Optional[bool] = True
-
-class CalledTokenRequest(TokenRequest):
-    called_user_id: Optional[str] = None
-    is_call_recording: Optional[bool] = True
-
-
-class RejectCallTokenRequest(TokenRequest):
-    caller_user_id: str
-    called_user_id: str
-
-class AnonymousCallerTokenRequest(BaseModel):
-    room_name: str
-    participant_identity: str
-    participant_identity_name: Optional[str] = "Anonymous"
-    participant_identity_type: Optional[str] = "caller"
-    called_user_id: Optional[str] = None
-    device_type: Optional[str] = None
-    is_push_notification: bool = True
-    is_call_recording: Optional[bool] = True
-
-class MessagingTokenRequest(TokenRequest):
-    sender_user_id: str
-    receiver_user_id: str
-    device_type: Optional[str] = None
-    is_push_notification: bool = True
-
-class CallerTokenResponse(BaseModel):
-    caller: TokenResponse
-    called: TokenResponse
-
-
-class AssociatedNumberBase(BaseModel):
-    phone_number: str
-    user_id: str
-    label: Optional[str] = None
-    is_active: bool = True
-
-
-class AssociatedNumberCreate(AssociatedNumberBase):
-    pass
-
-
-class AssociatedNumberUpdate(BaseModel):
-    phone_number: Optional[str] = None
-    user_id: Optional[str] = None
-    label: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class AssociatedNumberResponse(AssociatedNumberBase):
-    id: str
-    organization_id: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
+# Messaging Models
 class SendMessageRequest(BaseModel):
-    sender_user_id: str
-    receiver_user_id: str
-    room_name: str
-    message: str
-    message_type: Optional[str] = "text"
-    metadata: Optional[Dict[str, Any]] = None
-    is_push_notification: bool = True
-
+    sender_user_id: str = Field(..., description="User ID of the message sender")
+    receiver_user_id: str = Field(..., description="User ID of the message receiver")
+    room_name: str = Field(..., description="LiveKit room name for the conversation")
+    message: str = Field(..., description="Message content")
+    message_type: Optional[str] = Field("text", description="Type of message (text, image, file, etc.)")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional message metadata")
+    is_push_notification: bool = Field(True, description="Whether to send push notification to receiver")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "sender_user_id": "user123",
+                "receiver_user_id": "user456",
+                "room_name": "chat_room_123",
+                "message": "Hello, how are you?",
+                "message_type": "text",
+                "metadata": {},
+                "is_push_notification": True
+            }
+        }
 
 class MessageResponse(BaseModel):
-    id: str
-    conversation_id: str
-    sender_user_id: str
-    receiver_user_id: str
-    room_name: str
-    message: str
-    message_type: str
-    metadata: Optional[Dict[str, Any]] = None
-    created_at: str
-    read_at: Optional[str] = None
-
+    id: str = Field(..., description="Message ID")
+    conversation_id: str = Field(..., description="Conversation ID")
+    sender_user_id: str = Field(..., description="User ID of the sender")
+    receiver_user_id: str = Field(..., description="User ID of the receiver")
+    room_name: str = Field(..., description="LiveKit room name")
+    message: str = Field(..., description="Message content")
+    message_type: str = Field(..., description="Type of message")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+    created_at: str = Field(..., description="Message creation timestamp")
+    read_at: Optional[str] = Field(None, description="Message read timestamp")
 
 class ConversationInfo(BaseModel):
-    conversation_id: str
-    room_name: str
-    participant_user_id: str
-    participant_name: Optional[str] = None
-    participant_email: Optional[str] = None
-    last_message: Optional[str] = None
-    last_message_at: Optional[str] = None
-    unread_count: int = 0
-    created_at: str
-    updated_at: str
-
+    conversation_id: str = Field(..., description="Conversation ID")
+    room_name: str = Field(..., description="LiveKit room name")
+    participant_user_id: str = Field(..., description="Other participant's user ID")
+    participant_name: Optional[str] = Field(None, description="Other participant's name")
+    participant_email: Optional[str] = Field(None, description="Other participant's email")
+    last_message: Optional[str] = Field(None, description="Last message content")
+    last_message_at: Optional[str] = Field(None, description="Last message timestamp")
+    unread_count: int = Field(0, description="Number of unread messages")
+    created_at: str = Field(..., description="Conversation creation timestamp")
+    updated_at: str = Field(..., description="Conversation last update timestamp")
 
 class ConversationListResponse(BaseModel):
-    conversations: List[ConversationInfo] = Field(default_factory=list)
-    total: int
-
+    conversations: List[ConversationInfo] = Field(default_factory=list, description="List of conversations")
+    total: int = Field(..., description="Total number of conversations")
 
 class MessageListResponse(BaseModel):
-    messages: List[MessageResponse] = Field(default_factory=list)
-    total: int
-    conversation_id: str
-    messaging_tokens: Optional[TokenResponse] = None
-
+    messages: List[MessageResponse] = Field(default_factory=list, description="List of messages")
+    total: int = Field(..., description="Total number of messages")
+    conversation_id: str = Field(..., description="Conversation ID")
+    messaging_tokens: Optional[TokenResponse] = Field(None, description="LiveKit messaging token and wsUrl when requested via include_messaging_tokens")
 
 class MarkMessagesReadRequest(BaseModel):
-    conversation_id: str
-    message_ids: Optional[List[str]] = None
-
+    conversation_id: str = Field(..., description="Conversation ID")
+    message_ids: Optional[List[str]] = Field(None, description="Specific message IDs to mark as read. If None, marks all unread messages in conversation")

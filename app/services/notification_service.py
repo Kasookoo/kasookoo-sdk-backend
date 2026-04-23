@@ -15,10 +15,34 @@ from pymongo import IndexModel
 
 from app.config import DB_NAME, MONGO_URI, SERVER_API_HOST, STATIC_API_KEY
 from app.models.models import CallerTokenRequest
+from app.utils.mongodb_org import org_filter
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def format_device_info_string(device_info: dict) -> str:
+    if not device_info or not isinstance(device_info, dict):
+        return "Unknown Device"
+    parts: List[str] = []
+    device_type = (
+        device_info.get("device_type")
+        or device_info.get("type")
+        or device_info.get("platform", "")
+    )
+    if isinstance(device_type, str) and device_type:
+        parts.append(device_type.title())
+    if device_info.get("browser"):
+        parts.append(f"({device_info['browser']})")
+    os_info = device_info.get("os") or device_info.get("operating_system", "")
+    if os_info:
+        parts.append(f"on {os_info}")
+    model = device_info.get("model", "")
+    if model:
+        parts.append(f"({model})")
+    return " ".join(parts) if parts else "Unknown Device"
+
 
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
 database = client[DB_NAME]
@@ -391,6 +415,47 @@ class NotificationService:
             "active_tokens": active_tokens,
             "total_notifications": total_notifications,
         }
+
+    async def get_user_device_info(
+        self, user_id: str, user_type: str, organization_id: Optional[str] = None
+    ) -> List[dict]:
+        try:
+            query: Dict[str, Any] = {"user_id": user_id, "is_active": True, "user_type": user_type}
+            if organization_id:
+                query.update(org_filter(organization_id))
+            cursor = notification_tokens_collection.find(query)
+            device_info_list: List[dict] = []
+            async for token_doc in cursor:
+                device_info = token_doc.get("device_info") or {}
+                device_token = token_doc.get("device_token", "")
+                if not device_info:
+                    device_info = {
+                        "device_type": token_doc.get("device_type", "unknown"),
+                        "device_token": device_token,
+                    }
+                if "device_token" not in device_info:
+                    device_info = {**device_info, "device_token": device_token}
+                device_info_list.append(
+                    {
+                        "device_token": device_token,
+                        "device_info": device_info,
+                        "formatted_string": format_device_info_string(device_info),
+                    }
+                )
+            return device_info_list
+        except Exception as exc:
+            logger.error("Failed to get user device info: %s", exc)
+            return []
+
+    async def exist_user(self, user_id: str) -> bool:
+        try:
+            n = await notification_tokens_collection.count_documents(
+                {"user_id": user_id, "is_active": True}
+            )
+            return n > 0
+        except Exception as exc:
+            logger.error("Failed to check user notification tokens: %s", exc)
+            return False
 
     async def send_notification_to_callee(self, request: CallerTokenRequest) -> dict:
         url = f"{SERVER_API_HOST}/notifications/send-notification-to-callee"

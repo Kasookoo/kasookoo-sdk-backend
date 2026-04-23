@@ -1,26 +1,27 @@
-from app.config import MONGO_URI, DB_NAME, LIVEKIT_SDK_URL, LIVEKIT_SDK_API_KEY, LIVEKIT_SDK_API_SECRET
+from app.config import (
+    DB_NAME,
+    LIVEKIT_SDK_API_KEY,
+    LIVEKIT_SDK_API_SECRET,
+    LIVEKIT_SDK_URL,
+    MONGO_URI,
+)
 
-from .notification_service import NotificationService
+from .associated_number_service import AssociatedNumberService
 from .livekit_sip_bridge import LiveKitSIPBridge, SIPBridgeAPI
-from .associated_number_service import associated_number_service
-from .user_service import user_service
-from . import organization_service
+from .notification_service import NotificationService
+from .organization_service import OrganizationService
+from .token_storage_service import token_storage_service
+from .user_service import UserService
+
+user_service = UserService(MONGO_URI, DB_NAME)
+organization_service = OrganizationService(MONGO_URI, DB_NAME)
+associated_number_service = AssociatedNumberService(MONGO_URI, DB_NAME)
+livekit_sip_bridge = LiveKitSIPBridge(
+    livekit_url=LIVEKIT_SDK_URL,
+    api_key=LIVEKIT_SDK_API_KEY,
+    api_secret=LIVEKIT_SDK_API_SECRET,
+)
+sip_bridge_api = SIPBridgeAPI(livekit_sip_bridge)
 
 # Initialize notification service
 notification__service = NotificationService()
-
-# Lazy initialization: LiveKitAPI needs a running event loop (aiohttp ClientSession)
-livekit_sip_bridge = None
-sip_bridge_api = None
-
-
-def get_sip_bridge():
-    global livekit_sip_bridge, sip_bridge_api
-    if livekit_sip_bridge is None:
-        livekit_sip_bridge = LiveKitSIPBridge(
-            livekit_url=LIVEKIT_SDK_URL,
-            api_key=LIVEKIT_SDK_API_KEY,
-            api_secret=LIVEKIT_SDK_API_SECRET,
-        )
-        sip_bridge_api = SIPBridgeAPI(livekit_sip_bridge)
-    return livekit_sip_bridge, sip_bridge_api

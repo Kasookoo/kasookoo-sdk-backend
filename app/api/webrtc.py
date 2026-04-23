@@ -25,7 +25,7 @@ from app.services.recording_manager import LiveKitS3RecordingManager
 from app.services.token_service import TokenService
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api.auth import authenticate_static_token
+from app.api.auth import authenticate_token, sdk_token_scheme
 from app.security.interceptor import authenticate_sdk_user, intercept_sdk_access
 
 from app.utils.websocket_manager import WebSocketManager
@@ -755,15 +755,15 @@ async def get_call_tokens_anonymous(
     request: AnonymousCallerTokenRequest,
     background_tasks: BackgroundTasks,
     manager: WebRTCCallManager = Depends(get_call_manager),
-    _: str = Depends(authenticate_static_token),
+    token: str = Depends(sdk_token_scheme),
 ) -> TokenResponse:
     """
     Same as get-call-tokens but the caller is anonymous (not in user DB).
-    Requires API key: send Authorization: Bearer <STATIC_API_KEY>.
-    For use outside of login (e.g. public guest call from website).
+    Requires the same backend-signed SDK JWT as other routes (`Authorization: Bearer <token>` from `client-sessions`).
     Caller is identified by participant_identity and participant_identity_name only.
     Callee: provide called_user_id, or use ANONYMOUS_GUEST_CALL_ADMIN_EMAIL from config/.env.
     """
+    await authenticate_token(token)
     # Resolve called_user_id: use request value or fetch admin by ANONYMOUS_GUEST_CALL_ADMIN_EMAIL (cached)
     called_user_id = request.called_user_id
     if not called_user_id:
