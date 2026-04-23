@@ -136,7 +136,7 @@ apps:
             handle:
               - handler: reverse_proxy
                 upstreams:
-                  - dial: "172.31.44.61:5349"
+                  - dial: "172.18.36.113:5349"
                 transport:
                   protocol: http
                 headers:
