@@ -16,6 +16,8 @@ from passlib.context import CryptContext
 from .mongodb import BaseMongoClient
 from app.config import (
     CLERK_SECRET_KEY,
+    DB_NAME,
+    MONGO_URI,
     REDIS_URL,
     REDIS_USER_CACHE_PREFIX,
     REDIS_USER_CACHE_TTL_SECONDS,
@@ -653,3 +655,6 @@ class UserService(BaseMongoClient):
         except Exception as e:
             logger.error({"event": "password_update_failed", "user_id": user_id, "error": str(e)})
             raise HTTPException(status_code=500, detail=f"Failed to update password: {str(e)}")
+
+
+user_service = UserService(MONGO_URI, DB_NAME)
