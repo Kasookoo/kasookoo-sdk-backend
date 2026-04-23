@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "kasookoo-sdk-backend-complete",
 		"name": "Kasookoo SDK Backend - Complete API Collection",
-		"description": "Complete API collection for Kasookoo SDK Backend including Authentication, WebRTC, SDK SIP (LiveKit bridge at /api/v1/sip), Notifications, and Monitoring endpoints. SIP routes calls/make, calls/end, rooms/token, and sip/trunks require a Kasookoo SDK JWT (collection variable sdk_access_token). calls/dial and calls/hangup use STATIC_API_KEY (static_api_key).",
+		"description": "Kasookoo SDK Backend API. SDK JWT: run Authentication > Create Client Session, then use sdk_access_token and sdk_session_id. Most routes use Authorization: Bearer {{sdk_access_token}}; organization-scoped routes also send X-Organization-Id when the JWT has no organization_id. SIP call routes (make, dial, end, hangup) use the same SDK JWT. Optional STATIC_API_KEY (static_api_key) remains in variables for legacy or non-SDK tests if you add such routes. Modules: auth, WebRTC, SIP (/api/v1/sip), notifications, messaging, associated-numbers, CDR, dashboard, monitoring.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "kasookoo-sdk"
 	},
@@ -23,6 +23,10 @@
 									"        pm.collectionVariables.set('sdk_access_token', j.token);",
 									"        console.log('Saved token to sdk_access_token');",
 									"    }",
+									"    if (j && j.session_id) {",
+									"        pm.collectionVariables.set('sdk_session_id', j.session_id);",
+									"        console.log('Saved session_id to sdk_session_id');",
+									"    }",
 									"} catch (e) { console.warn(e); }"
 								],
 								"type": "text/javascript"
@@ -39,14 +43,22 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"sub\": \"postman_test_user\",\n  \"organization_id\": null,\n  \"email\": \"test@example.com\",\n  \"scopes\": [\"webrtc:token:create\"],\n  \"ttl_seconds\": 3600\n}"
+							"raw": "{\n  \"sub\": \"postman_test_user\",\n  \"organization_id\": null,\n  \"email\": \"test@example.com\",\n  \"scopes\": [\n    \"webrtc:token:create\",\n    \"webrtc:call:read\",\n    \"webrtc:call:end\",\n    \"messaging:token:create\",\n    \"messaging:send\",\n    \"recording:start\",\n    \"recording:read\",\n    \"recording:stop\"\n  ],\n  \"ttl_seconds\": 600\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/sdk/auth/client-sessions",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sdk", "auth", "client-sessions"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sdk",
+								"auth",
+								"client-sessions"
+							]
 						},
-						"description": "Obtain a Kasookoo SDK JWT. On success, the Tests script stores the token in collection variable sdk_access_token for SIP and other JWT-protected routes."
+						"description": "Obtain a Kasookoo SDK JWT (max ttl_seconds 600 per API). Tests script saves sdk_access_token and sdk_session_id for refresh/revoke and scoped routes."
 					}
 				},
 				{
@@ -81,18 +93,249 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/token",
-							"host": ["{{base_url}}"],
-							"path": ["token"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"token"
+							]
 						},
 						"description": "Login to get JWT access token (Deprecated - use static API key instead)"
 					}
+				},
+				{
+					"name": "Introspect SDK Token",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sdk/auth/introspect",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sdk",
+								"auth",
+								"introspect"
+							]
+						},
+						"description": "Returns decoded claims for the Bearer SDK JWT (debug)."
+					}
+				},
+				{
+					"name": "JWKS (SDK signing keys)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/.well-known/jwks.json",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								".well-known",
+								"jwks.json"
+							]
+						},
+						"description": "Public keys for verifying RS256 SDK tokens. No authentication."
+					}
+				},
+				{
+					"name": "Refresh SDK Session Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sdk/auth/sessions/{{sdk_session_id}}/tokens",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sdk",
+								"auth",
+								"sessions",
+								"{{sdk_session_id}}",
+								"tokens"
+							]
+						},
+						"description": "POST with Bearer current SDK JWT; session_id in path must match token sid claim."
+					}
+				},
+				{
+					"name": "Revoke SDK Session",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/sdk/auth/sessions/{{sdk_session_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sdk",
+								"auth",
+								"sessions",
+								"{{sdk_session_id}}"
+							]
+						},
+						"description": "Marks the session inactive. Bearer token must be for the same session."
+					}
 				}
 			],
-			"description": "Authentication endpoints. Use Create Client Session to populate sdk_access_token for JWT-protected APIs (including most SDK SIP routes)."
+			"description": "SDK auth: client-sessions mints JWTs; introspect and session refresh/revoke are under /api/v1/sdk/auth. JWKS is served at /.well-known/jwks.json (app root, not under /api/v1)."
 		},
 		{
 			"name": "WebRTC - Call Management",
 			"item": [
+				{
+					"name": "Get LiveKit Token (simple)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/get-token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"get-token"
+							]
+						},
+						"description": "Issue a basic LiveKit room token. No Authorization required.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_name\": \"call_room_123\",\n  \"participant_identity\": \"user123\",\n  \"participant_identity_name\": \"John\",\n  \"participant_identity_type\": \"caller\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Get Caller LiveKit Token (full flow)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/get-caller-livekit-token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"get-caller-livekit-token"
+							]
+						},
+						"description": "Caller token with user lookup and optional push. Requires valid SDK JWT (no scope list enforced beyond session).",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"participant_identity\": \"caller_user_123\",\n  \"participant_identity_name\": \"John Doe\",\n  \"participant_identity_type\": \"customer\",\n  \"room_name\": \"call_room_123\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
+						}
+					}
+				},
+				{
+					"name": "Get Call Tokens",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/get-call-tokens",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"get-call-tokens"
+							]
+						},
+						"description": "Same caller flow as get-caller-token; requires scope webrtc:token:create.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"participant_identity\": \"caller_user_123\",\n  \"participant_identity_name\": \"John Doe\",\n  \"participant_identity_type\": \"caller\",\n  \"room_name\": \"call_room_123\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
+						}
+					}
+				},
+				{
+					"name": "Get Call Tokens (anonymous caller)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/get-call-tokens-anonymous",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"get-call-tokens-anonymous"
+							]
+						},
+						"description": "Anonymous caller; requires SDK JWT. Optional called_user_id or admin email from env.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_name\": \"call_room_guest\",\n  \"participant_identity\": \"guest_session_1\",\n  \"participant_identity_name\": \"Guest\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"web\",\n  \"is_push_notification\": false,\n  \"is_call_recording\": true\n}"
+						}
+					}
+				},
 				{
 					"name": "Get Caller Token",
 					"request": {
@@ -104,7 +347,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -113,8 +356,15 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/get-caller-token",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "get-caller-token"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"get-caller-token"
+							]
 						},
 						"description": "Generate LiveKit access token for caller and initiate call session"
 					}
@@ -130,7 +380,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -139,8 +389,15 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/get-called-token",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "get-called-token"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"get-called-token"
+							]
 						},
 						"description": "Generate LiveKit access token for called user"
 					}
@@ -152,13 +409,22 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/calls/{{room_name}}/end",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "calls", "{{room_name}}", "end"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"calls",
+								"{{room_name}}",
+								"end"
+							]
 						},
 						"description": "End an active call session"
 					}
@@ -170,50 +436,50 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/calls/{{room_name}}/status",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "calls", "{{room_name}}", "status"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"calls",
+								"{{room_name}}",
+								"status"
+							]
 						},
 						"description": "Get current call status and recording information"
 					}
 				},
 				{
-					"name": "List Call Sessions",
+					"name": "Debug Active Calls (in-memory)",
 					"request": {
 						"method": "GET",
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/v1/webrtc/calls/debug?search={{search_term}}&skip=0&limit=10",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "calls", "debug"],
-							"query": [
-								{
-									"key": "search",
-									"value": "{{search_term}}",
-									"description": "Search by room_name, caller_id, or callee_id"
-								},
-								{
-									"key": "skip",
-									"value": "0",
-									"description": "Number of records to skip"
-								},
-								{
-									"key": "limit",
-									"value": "10",
-									"description": "Max records to return"
-								}
+							"raw": "{{base_url}}/api/v1/webrtc/calls/debug",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"calls",
+								"debug"
 							]
 						},
-						"description": "List call sessions with search and pagination"
+						"description": "Debug snapshot: active room keys and participant_to_room map. Requires valid SDK JWT (authenticate_sdk_user). For paginated call history with filters, use CDR > List Call Sessions (GET /api/v1/cdr/sessions)."
 					}
 				},
 				{
@@ -223,13 +489,20 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/calls",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "calls"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"calls"
+							]
 						},
 						"description": "List all active calls"
 					}
@@ -242,10 +515,6 @@
 							{
 								"key": "Content-Type",
 								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
 							}
 						],
 						"body": {
@@ -254,14 +523,52 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/calls/reject",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "calls", "reject"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"calls",
+								"reject"
+							]
 						},
 						"description": "Reject an incoming call"
 					}
+				},
+				{
+					"name": "Caller End Call",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webrtc/calls/caller-end",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"calls",
+								"caller-end"
+							]
+						},
+						"description": "Notify callee and tear down room when caller ends before connect. No Authorization in API (matches backend).",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_name\": \"call_room_123\",\n  \"participant_identity\": \"caller_user_123\",\n  \"participant_identity_type\": \"caller\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\"\n}"
+						}
+					}
 				}
 			],
-			"description": "WebRTC call management endpoints"
+			"description": "WebRTC call APIs. Token and call lifecycle routes use SDK JWT with scopes (webrtc:token:create, webrtc:call:read, webrtc:call:end). Reject / caller-end do not require Authorization in the current backend."
 		},
 		{
 			"name": "WebRTC - Recording Management",
@@ -277,7 +584,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -286,8 +593,16 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/recordings/start",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "recordings", "start"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"recordings",
+								"start"
+							]
 						},
 						"description": "Start recording without call context (standalone recording)"
 					}
@@ -299,19 +614,21 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/v1/webrtc/recordings/{{egress_id}}/status?room_name={{room_name}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "recordings", "{{egress_id}}", "status"],
-							"query": [
-								{
-									"key": "room_name",
-									"value": "{{room_name}}",
-									"description": "Room name (optional)"
-								}
+							"raw": "{{base_url}}/api/v1/webrtc/recordings/{{egress_id}}/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"recordings",
+								"{{egress_id}}",
+								"status"
 							]
 						},
 						"description": "Get recording status and information"
@@ -324,13 +641,22 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/recordings/{{egress_id}}/stop",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "recordings", "{{egress_id}}", "stop"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"recordings",
+								"{{egress_id}}",
+								"stop"
+							]
 						},
 						"description": "Stop a standalone recording"
 					}
@@ -342,13 +668,22 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/download-recording/{{room_name}}/{{file_name}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "download-recording", "{{room_name}}", "{{file_name}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"download-recording",
+								"{{room_name}}",
+								"{{file_name}}"
+							]
 						},
 						"description": "Download a recorded call file"
 					}
@@ -375,8 +710,16 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/webrtc/webhooks/livekit",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "webrtc", "webhooks", "livekit"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webrtc",
+								"webhooks",
+								"livekit"
+							]
 						},
 						"description": "Handle LiveKit webhook events"
 					}
@@ -407,8 +750,16 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/calls/make",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "make"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"calls",
+								"make"
+							]
 						},
 						"description": "Initiate an outbound SIP call. Requires Kasookoo SDK JWT (Authorization: Bearer {{sdk_access_token}}). Run Authentication > Create Client Session first, or paste a token into the sdk_access_token collection variable."
 					}
@@ -424,7 +775,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -433,10 +784,18 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/calls/dial",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "dial"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"calls",
+								"dial"
+							]
 						},
-						"description": "Initiate an outbound SIP call (server-to-server). Uses STATIC_API_KEY (static_api_key), not the SDK JWT."
+						"description": "Same outbound behavior as make; uses SDK JWT (authenticate_token), same as other /sip/calls/* routes."
 					}
 				},
 				{
@@ -459,8 +818,16 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/calls/end",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "end"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"calls",
+								"end"
+							]
 						},
 						"description": "End an active SIP call. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
@@ -476,7 +843,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -485,14 +852,22 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/calls/hangup",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "calls", "hangup"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"calls",
+								"hangup"
+							]
 						},
-						"description": "End an active SIP call (server-to-server). Uses STATIC_API_KEY (static_api_key), not the SDK JWT."
+						"description": "Same end behavior as End SIP Call; uses SDK JWT (authenticate_token)."
 					}
 				}
 			],
-			"description": "SDK SIP call management (/api/v1/sip). make and end use SDK JWT; dial and hangup use static API key."
+			"description": "SDK SIP call management (/api/v1/sip). make, dial, end, and hangup all require Kasookoo SDK JWT (sdk_access_token)."
 		},
 		{
 			"name": "SIP - Room & Token Management",
@@ -517,8 +892,16 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/rooms/token",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "rooms", "token"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"rooms",
+								"token"
+							]
 						},
 						"description": "Generate LiveKit access token for joining a SIP room. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
@@ -535,8 +918,16 @@
 						],
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/sip/trunks",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "sip", "trunks"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"sip",
+								"trunks"
+							]
 						},
 						"description": "List configured SIP trunks. Requires Kasookoo SDK JWT (sdk_access_token)."
 					}
@@ -554,8 +945,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/health",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "health"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"health"
+							]
 						},
 						"description": "Health check for the SDK SIP bridge. No authentication."
 					}
@@ -567,8 +965,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip"
+							]
 						},
 						"description": "SDK SIP API index (route list). No authentication."
 					}
@@ -593,14 +997,709 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/sip/livekit-events",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "sip", "livekit-events"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"sip",
+								"livekit-events"
+							]
 						},
 						"description": "LiveKit webhook receiver for SIP (Authorization must match LiveKit webhook signing; set livekit_webhook_auth). Body in Postman is illustrative; LiveKit sends signed payloads."
 					}
 				}
 			],
 			"description": "SDK SIP system routes: health and root are open; LiveKit webhook uses LiveKit authorization header."
+		},
+		{
+			"name": "CDR - Call Detail Records",
+			"description": "Organization-scoped call session listing and CSV export. Requires SDK JWT + X-Organization-Id (or org in JWT).",
+			"item": [
+				{
+					"name": "List Call Sessions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/cdr/sessions?skip=0&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"cdr",
+								"sessions"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "caller_id",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "callee_id",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "date_field",
+									"value": "created_at"
+								}
+							]
+						},
+						"description": "Paginated CDR with optional search, caller_id, callee_id, kind, status, date_from, date_to, date_field."
+					}
+				},
+				{
+					"name": "Export Call Sessions (CSV)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/cdr/sessions/export?max_rows=1000",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"cdr",
+								"sessions",
+								"export"
+							],
+							"query": [
+								{
+									"key": "max_rows",
+									"value": "1000"
+								},
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Same filters as list; returns UTF-8 CSV with BOM."
+					}
+				}
+			]
+		},
+		{
+			"name": "Dashboard",
+			"description": "Aggregated CDR metrics for charts (organization-scoped).",
+			"item": [
+				{
+					"name": "Dashboard Summary",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dashboard/summary?date_field=created_at",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dashboard",
+								"summary"
+							],
+							"query": [
+								{
+									"key": "date_field",
+									"value": "created_at"
+								},
+								{
+									"key": "date_from",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "date_to",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Optional date_from, date_to (ISO or YYYY-MM-DD), date_field in created_at|started_at|ended_at."
+					}
+				}
+			]
+		},
+		{
+			"name": "Messaging",
+			"description": "Persistent messaging; SDK JWT + X-Organization-Id. send/get-token need messaging scopes.",
+			"item": [
+				{
+					"name": "Get Messaging Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/get-token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"get-token"
+							]
+						},
+						"description": "Scope messaging:token:create.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_name\": \"chat_room_123\",\n  \"participant_identity\": \"user123\",\n  \"participant_identity_name\": \"John\",\n  \"participant_identity_type\": \"caller\",\n  \"sender_user_id\": \"user123\",\n  \"receiver_user_id\": \"user456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true\n}"
+						}
+					}
+				},
+				{
+					"name": "Send Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/send",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"send"
+							]
+						},
+						"description": "Scope messaging:send.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sender_user_id\": \"user123\",\n  \"receiver_user_id\": \"user456\",\n  \"room_name\": \"chat_room_123\",\n  \"message\": \"Hello\",\n  \"message_type\": \"text\",\n  \"metadata\": {},\n  \"is_push_notification\": true\n}"
+						}
+					}
+				},
+				{
+					"name": "List Conversations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/conversations?skip=0&limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"conversations"
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Resolved user from token email/sub."
+					}
+				},
+				{
+					"name": "List Messages",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/conversations/{{conversation_id}}/messages?skip=0&limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"conversations",
+								"{{conversation_id}}",
+								"messages"
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "include_messaging_tokens",
+									"value": "false",
+									"disabled": true
+								}
+							]
+						},
+						"description": ""
+					}
+				},
+				{
+					"name": "Mark Messages Read",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/mark-read",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"mark-read"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"message_ids\": null\n}"
+						}
+					}
+				},
+				{
+					"name": "Delete Message",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/messages/{{message_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"messages",
+								"{{message_id}}"
+							]
+						},
+						"description": ""
+					}
+				},
+				{
+					"name": "Delete Conversation",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/conversations/{{conversation_id}}?delete_messages=false",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"conversations",
+								"{{conversation_id}}"
+							],
+							"query": [
+								{
+									"key": "delete_messages",
+									"value": "false"
+								}
+							]
+						},
+						"description": ""
+					}
+				},
+				{
+					"name": "Unread Count",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/unread-count",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"unread-count"
+							],
+							"query": [
+								{
+									"key": "conversation_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": ""
+					}
+				},
+				{
+					"name": "Message Count",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/messaging/message-count",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"messaging",
+								"message-count"
+							],
+							"query": [
+								{
+									"key": "conversation_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": ""
+					}
+				}
+			]
+		},
+		{
+			"name": "Associated Numbers",
+			"description": "Map inbound E.164 numbers to users per organization. SDK JWT + X-Organization-Id.",
+			"item": [
+				{
+					"name": "List Associated Numbers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/associated-numbers?skip=0&limit=100",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"associated-numbers"
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						},
+						"description": ""
+					}
+				},
+				{
+					"name": "Create Associated Number",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/associated-numbers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"associated-numbers"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone_number\": \"+15551234567\",\n  \"user_id\": \"USER_OBJECT_ID\",\n  \"label\": \"Support line\",\n  \"is_active\": true\n}"
+						}
+					}
+				},
+				{
+					"name": "Get Associated Number",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/associated-numbers/{{associated_number_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"associated-numbers",
+								"{{associated_number_id}}"
+							]
+						},
+						"description": ""
+					}
+				},
+				{
+					"name": "Update Associated Number",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/associated-numbers/{{associated_number_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"associated-numbers",
+								"{{associated_number_id}}"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"label\": \"Updated label\",\n  \"is_active\": true\n}"
+						}
+					}
+				},
+				{
+					"name": "Delete Associated Number",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id (or rely on organization_id claim in SDK JWT)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/associated-numbers/{{associated_number_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"associated-numbers",
+								"{{associated_number_id}}"
+							]
+						},
+						"description": ""
+					}
+				}
+			]
 		},
 		{
 			"name": "Notifications - Device Token Management",
@@ -616,7 +1715,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -625,10 +1724,17 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/notifications/register-token",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "notifications", "register-token"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"notifications",
+								"register-token"
+							]
 						},
-						"description": "Register a device token for push notifications"
+						"description": "Register a device token for push notifications. Uses SDK JWT (client-sessions), not static_api_key."
 					}
 				},
 				{
@@ -642,7 +1748,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -651,10 +1757,17 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/notifications/update-token",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "notifications", "update-token"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"notifications",
+								"update-token"
+							]
 						},
-						"description": "Update an existing device token for push notifications"
+						"description": "Update an existing device token for push notifications. Uses SDK JWT (client-sessions), not static_api_key."
 					}
 				},
 				{
@@ -668,7 +1781,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{static_api_key}}"
+								"value": "Bearer {{sdk_access_token}}"
 							}
 						],
 						"body": {
@@ -677,10 +1790,17 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/notifications/unregister-token",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "notifications", "unregister-token"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"notifications",
+								"unregister-token"
+							]
 						},
-						"description": "Unregister a device token to stop receiving push notifications"
+						"description": "Unregister a device token to stop receiving push notifications. Uses SDK JWT (client-sessions), not static_api_key."
 					}
 				}
 			],
@@ -696,8 +1816,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/v1/monitoring/metrics",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "monitoring", "metrics"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"monitoring",
+								"metrics"
+							]
 						},
 						"description": "Get Prometheus metrics in Prometheus format for scraping"
 					}
@@ -709,8 +1836,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/v1/monitoring/health",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "monitoring", "health"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"monitoring",
+								"health"
+							]
 						},
 						"description": "Basic health check endpoint"
 					}
@@ -722,8 +1856,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/v1/monitoring/status",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "monitoring", "status"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"monitoring",
+								"status"
+							]
 						},
 						"description": "Detailed system status with comprehensive metrics in JSON format"
 					}
@@ -735,8 +1876,16 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/v1/monitoring/metrics/json",
-							"host": ["{{base_url}}"],
-							"path": ["api", "v1", "monitoring", "metrics", "json"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"monitoring",
+								"metrics",
+								"json"
+							]
 						},
 						"description": "Get metrics in JSON format for programmatic access"
 					}
@@ -750,14 +1899,18 @@
 			"listen": "prerequest",
 			"script": {
 				"type": "text/javascript",
-				"exec": [""]
+				"exec": [
+					""
+				]
 			}
 		},
 		{
 			"listen": "test",
 			"script": {
 				"type": "text/javascript",
-				"exec": [""]
+				"exec": [
+					""
+				]
 			}
 		}
 	],
@@ -806,7 +1959,31 @@
 			"key": "livekit_webhook_auth",
 			"value": "your_livekit_webhook_auth_here",
 			"type": "string"
+		},
+		{
+			"key": "organization_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "sdk_session_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "conversation_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "message_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "associated_number_id",
+			"value": "",
+			"type": "string"
 		}
 	]
 }
-
