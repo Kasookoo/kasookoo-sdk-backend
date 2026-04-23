@@ -9,7 +9,7 @@ from typing import AsyncIterator, Dict, List, Set, Optional, Any
 import uuid
 from app.config import MONGO_URI, DB_NAME
 
-import motor
+from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient
 
 from app.models.models import (
@@ -126,7 +126,7 @@ class WebRTCCallManager:
 
         # Add MongoDB client and collection
         # Initialize MongoDB client
-        self.mongo_client = client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
+        self.mongo_client = client = AsyncIOMotorClient(MONGO_URI)
         self.db = self.mongo_client[DB_NAME]
         self.calls_collection = self.db["call_sessions"]
 
