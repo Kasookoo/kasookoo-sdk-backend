@@ -24,19 +24,19 @@ redis:
   max_redirects: null
 turn:
   enabled: true
-  domain: inapp-turn-test.kasookoo.ai
+  domain: inapp-turn-sdk.kasookoo.ai
   tls_port: 5349
   udp_port: 3478
   external_tls: true
 ingress:
-  rtmp_base_url: rtmp://inapp-test.kasookoo.ai:1935/x
-  whip_base_url: https://inapp-whip-test.kasookoo.ai/w
+  rtmp_base_url: rtmp://inapp-sdk.kasookoo.ai:1935/x
+  whip_base_url: https://inapp-whip-sdk.kasookoo.ai/w
 keys:
   APIDnfJj67ghFUY: dhSrBCmoKmy0l8GhItHCklqDwAaNneZJXPiLZEcnsJT
 webhook:
   api_key: APIDnfJj67ghFUY
   urls:
-    - https://sdk-test.kasookoo.ai/api/v1/sdk/webhooks/livekit
+    - https://sdk.kasookoo.ai/api/v1/webrtc/webhooks/livekit
 logging:
   level: info
   sample: false

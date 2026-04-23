@@ -9,28 +9,163 @@ apps:
   tls:
     certificates:
       automate:
-        - inapp-test.kasookoo.ai
-        - inapp-turn-test.kasookoo.ai
-        - inapp-whip-test.kasookoo.ai
-        - sdk-test.kasookoo.ai
-        - monitoring-test.kasookoo.ai
+        - inapp-sdk.kasookoo.ai
+        - inapp-turn-sdk.kasookoo.ai
+        - inapp-whip-sdk.kasookoo.ai
+        - sdk.kasookoo.ai
+        - monitoring-sdk.kasookoo.ai
+
+  # HTTP/HTTPS layer for all services
   http:
     servers:
       main_http:
         listen: [":443"]
-        protocols: ["h1", "h2"]
+        protocols: ["h1", "h2"]  # Disable HTTP/3
         routes:
+          # sdk.kasookoo.ai routes
           - match:
-              - host: ["sdk-test.kasookoo.ai"]
+              - host: ["sdk.kasookoo.ai"]
+            handle:
+              - handler: headers
+                response:
+                  set:
+                    Access-Control-Allow-Origin: ["*"]
+                    Access-Control-Allow-Methods: ["GET, POST, PUT, DELETE, OPTIONS"]
+                    Access-Control-Allow-Headers: ["*"]
+                    Access-Control-Allow-Credentials: ["true"]
+              - handler: subroute
+                routes:
+                  # Handle OPTIONS preflight requests
+                  - match:
+                      - method: ["OPTIONS"]
+                    handle:
+                      - handler: static_response
+                        status_code: 204
+
+                  # API routes - proxy to port 8000
+                  - match:
+                      - path: ["/api", "/api/*"]
+                    handle:
+                      - handler: reverse_proxy
+                        upstreams:
+                          - dial: "localhost:8000"
+                        transport:
+                          protocol: http
+                        headers:
+                          request:
+                            set:
+                              X-Forwarded-For: ["{http.request.remote.host}"]
+                              X-Forwarded-Proto: ["https"]
+                              X-Real-IP: ["{http.request.remote.host}"]
+                              Host: ["{http.request.host}"]
+
+                  # Root and all other routes - serve static files with SPA fallback
+                  - match:
+                      - path: ["/*"]
+                    handle:
+                      - handler: file_server
+                        root: "/var/www/html/webrtc.kasookoo.ai"
+                        index_names: ["index.html"]
+                        pass_thru: true
+                      - handler: rewrite
+                        uri: "/index.html"
+                      - handler: file_server
+                        root: "/var/www/html/webrtc.kasookoo.ai"
+                        index_names: ["index.html"]
+            terminal: true
+
+          # inapp-test.kasookoo.ai routes with CORS
+          - match:
+              - host: ["inapp-sdk.kasookoo.ai"]
+            handle:
+              - handler: headers
+                response:
+                  set:
+                    Access-Control-Allow-Origin: ["*"]
+                    Access-Control-Allow-Methods: ["GET, POST, PUT, DELETE, OPTIONS"]
+                    Access-Control-Allow-Headers: ["*"]
+                    Access-Control-Allow-Credentials: ["true"]
+              - handler: subroute
+                routes:
+                  # Handle OPTIONS preflight requests
+                  - match:
+                      - method: ["OPTIONS"]
+                    handle:
+                      - handler: static_response
+                        status_code: 204
+
+                  # Proxy API requests to port 7880
+                  - match:
+                      - path: ["/*"]
+                    handle:
+                      - handler: reverse_proxy
+                        upstreams:
+                          - dial: "localhost:7880"
+                        transport:
+                          protocol: http
+                        headers:
+                          request:
+                            set:
+                              X-Forwarded-For: ["{http.request.remote.host}"]
+                              X-Forwarded-Proto: ["https"]
+                              X-Real-IP: ["{http.request.remote.host}"]
+                              Host: ["{http.request.host}"]
+            terminal: true
+
+          # inapp-whip-test.kasookoo.ai routes
+          - match:
+              - host: ["inapp-whip-sdk.kasookoo.ai"]
             handle:
               - handler: reverse_proxy
                 upstreams:
-                  - dial: "localhost:7000"
+                  - dial: "localhost:8080"
+                transport:
+                  protocol: http
+                headers:
+                  request:
+                    set:
+                      X-Forwarded-For: ["{http.request.remote.host}"]
+                      X-Forwarded-Proto: ["https"]
+                      X-Real-IP: ["{http.request.remote.host}"]
+                      Host: ["{http.request.host}"]
             terminal: true
+
+          # inapp-turn-test.kasookoo.ai routes (TURN over HTTPS)
           - match:
-              - host: ["monitoring-test.kasookoo.ai"]
+              - host: ["inapp-turn-sdk.kasookoo.ai"]
+            handle:
+              - handler: reverse_proxy
+                upstreams:
+                  - dial: "172.31.44.61:5349"
+                transport:
+                  protocol: http
+                headers:
+                  request:
+                    set:
+                      X-Forwarded-For: ["{http.request.remote.host}"]
+                      X-Forwarded-Proto: ["https"]
+                      X-Real-IP: ["{http.request.remote.host}"]
+                      Host: ["{http.request.host}"]
+            terminal: true
+
+          # monitoring-test.kasookoo.ai routes (Grafana)
+          - match:
+              - host: ["monitoring-sdk.kasookoo.ai"]
             handle:
               - handler: reverse_proxy
                 upstreams:
                   - dial: "localhost:3000"
+                transport:
+                  protocol: http
+                  versions: ["1.1", "2"]
+                headers:
+                  request:
+                    set:
+                      X-Forwarded-For: ["{http.request.remote.host}"]
+                      X-Forwarded-Proto: ["https"]
+                      X-Real-IP: ["{http.request.remote.host}"]
+                      Host: ["{http.request.host}"]
             terminal: true
+
+  # Remove Layer 4 completely if not needed
+

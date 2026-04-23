@@ -12,4 +12,4 @@ redis:
   max_redirects: null
 api_key: APIDnfJj67ghFUY
 api_secret: dhSrBCmoKmy0l8GhItHCklqDwAaNneZJXPiLZEcnsJT
-ws_url: wss://inapp-test.kasookoo.ai
+ws_url: wss://inapp-sdk.kasookoo.ai

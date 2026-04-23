@@ -1,4 +1,4 @@
-redis:
+  redis:
   address: localhost:6379
   username: ""
   password: ""
@@ -12,7 +12,7 @@ redis:
   max_redirects: null
 api_key: APIDnfJj67ghFUY
 api_secret: dhSrBCmoKmy0l8GhItHCklqDwAaNneZJXPiLZEcnsJT
-ws_url: wss://inapp-test.kasookoo.ai
+ws_url: wss://inapp-sdk.kasookoo.ai
 rtmp_port: 1935
 whip_port: 8080
 http_relay_port: 9090
