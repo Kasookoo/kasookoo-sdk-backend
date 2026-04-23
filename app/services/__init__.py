@@ -22,5 +22,11 @@ livekit_sip_bridge = LiveKitSIPBridge(
 )
 sip_bridge_api = SIPBridgeAPI(livekit_sip_bridge)
 
+
+def get_sip_bridge():
+    """Shared LiveKit SIP bridge and handler for `app.api.sip` (lazy init of router globals)."""
+    return livekit_sip_bridge, sip_bridge_api
+
+
 # Initialize notification service
 notification__service = NotificationService()
