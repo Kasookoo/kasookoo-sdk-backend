@@ -7,8 +7,6 @@ from datetime import datetime
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi.params import Depends
-from fsspec.registry import s3_msg
-from pydantic.fields import Deprecated
 
 from app.config import LIVEKIT_SDK_URL, LIVEKIT_SDK_API_KEY, LIVEKIT_SDK_API_SECRET, ANONYMOUS_GUEST_CALL_ADMIN_EMAIL
 from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, Request, Header
