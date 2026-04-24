@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException
 from pymongo.collection import Collection
 from bson import ObjectId
+from bson.errors import InvalidId
 import hashlib
 import requests
 import httpx
@@ -255,7 +256,13 @@ class UserService(BaseMongoClient):
         if cached:
             return self._from_cache_value(cached)
 
-        query = {"_id": ObjectId(user_id)}
+        try:
+            object_id = ObjectId(user_id)
+        except (InvalidId, TypeError, ValueError):
+            logger.info({"event": "invalid_user_id_format", "user_id": str(user_id)})
+            return None
+
+        query = {"_id": object_id}
         if organization_id:
             query.update(_org_filter(organization_id))
         user = self.collection.find_one(query)
