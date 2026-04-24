@@ -82,6 +82,18 @@ def _format_user_name(user: dict) -> str:
     return name or user.get("email", "User")
 
 
+def _validate_object_id(value: str, field_name: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    if not ObjectId.is_valid(normalized):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {field_name}. Expected a 24-character Mongo ObjectId.",
+        )
+    return normalized
+
+
 def _build_room_token(room_name: str, participant_identity: str, participant_name: str) -> str:
     access_token = api.AccessToken(LIVEKIT_SDK_API_KEY, LIVEKIT_SDK_API_SECRET)
     video_grant = api.VideoGrants(
@@ -454,6 +466,9 @@ async def _prepare_caller_call_flow(
     logger.info({"event": "get_caller_livekit_token_request", "request": request.dict() if hasattr(request, 'dict') else str(request)})
     logger.info({"event": "device_type_received", "device_type": request.device_type})
     logger.info({"event": "caller_user_id_found", "caller_user_id": request.caller_user_id})
+
+    request.caller_user_id = _validate_object_id(request.caller_user_id, "caller_user_id")
+    request.called_user_id = _validate_object_id(request.called_user_id, "called_user_id")
 
     caller_user = user_service.get_user_by_id(request.caller_user_id)
     if caller_user:
