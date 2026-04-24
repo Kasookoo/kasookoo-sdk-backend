@@ -1807,6 +1807,661 @@
 			"description": "Device token management for push notifications"
 		},
 		{
+			"name": "Organizations",
+			"description": "Organization CRUD and SIP trunk settings management.",
+			"item": [
+				{
+					"name": "Organization Signup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"organization_name\": \"Acme Inc\",\n  \"organization_slug\": \"acme-inc\",\n  \"organization_email\": \"admin@acme.com\",\n  \"organization_phone_number\": \"+15551234567\",\n  \"admin_email\": \"owner@acme.com\",\n  \"admin_phone_number\": \"+15557654321\",\n  \"admin_first_name\": \"Owner\",\n  \"admin_last_name\": \"Admin\",\n  \"admin_password\": \"StrongPassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations/signup",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations",
+								"signup"
+							]
+						}
+					}
+				},
+				{
+					"name": "List Organizations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations?skip=0&limit=100",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations"
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Organization",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations/{{organization_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations",
+								"{{organization_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Organization",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Acme Inc\",\n  \"slug\": \"acme-inc-2\",\n  \"email\": \"contact@acme.com\",\n  \"phone_number\": \"+15550001111\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Organization",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Acme Updated\",\n  \"email\": \"new-contact@acme.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations/{{organization_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations",
+								"{{organization_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Organization",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations/{{organization_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations",
+								"{{organization_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Remove SIP Outbound Trunk",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations/{{organization_id}}/settings/sip-outbound-trunk",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations",
+								"{{organization_id}}",
+								"settings",
+								"sip-outbound-trunk"
+							]
+						}
+					}
+				},
+				{
+					"name": "Remove SIP Inbound Trunk",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations/{{organization_id}}/settings/sip-inbound-trunk",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations",
+								"{{organization_id}}",
+								"settings",
+								"sip-inbound-trunk"
+							]
+						}
+					}
+				},
+				{
+					"name": "Reset SIP Inbound Trunk",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/organizations/{{organization_id}}/settings/sip-inbound-trunk/reset",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"organizations",
+								"{{organization_id}}",
+								"settings",
+								"sip-inbound-trunk",
+								"reset"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"description": "User management, logout, and debug endpoints.",
+			"item": [
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"logout"
+							]
+						}
+					}
+				},
+				{
+					"name": "Logout All Devices",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/logout-all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"logout-all"
+							]
+						}
+					}
+				},
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users?skip=0&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users"
+							],
+							"query": [
+								{
+									"key": "role",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filter Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/filter?skip=0&limit=100",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"filter"
+							],
+							"query": [
+								{
+									"key": "role",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "show_user_list",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Random User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/random-user?skip=0&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"random-user"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"newuser@example.com\",\n  \"phone_number\": \"+15550123456\",\n  \"first_name\": \"New\",\n  \"last_name\": \"User\",\n  \"password\": \"Password123!\",\n  \"role\": \"customer\",\n  \"caller_id\": \"+15550123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/create",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"create"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"{{user_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"updateduser@example.com\",\n  \"phone_number\": \"+15550123456\",\n  \"first_name\": \"Updated\",\n  \"last_name\": \"User\",\n  \"role\": \"driver\",\n  \"caller_id\": \"+15550123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"{{user_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/{{user_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"{{user_id}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Clerk Signin Hook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"data\": {\n    \"email_address\": \"newuser@example.com\",\n    \"user_id\": \"clerk_user_123\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/clerk-signin-hook",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"clerk-signin-hook"
+							]
+						}
+					}
+				},
+				{
+					"name": "Debug Device Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/debug/device-info/{{user_id}}?user_type=driver",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"debug",
+								"device-info",
+								"{{user_id}}"
+							],
+							"query": [
+								{
+									"key": "user_type",
+									"value": "driver"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Debug User Tokens",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/debug/user-tokens/{{user_id}}?active_only=true",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"debug",
+								"user-tokens",
+								"{{user_id}}"
+							],
+							"query": [
+								{
+									"key": "active_only",
+									"value": "true"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
 			"name": "Monitoring - Prometheus & System Metrics",
 			"item": [
 				{
@@ -1982,6 +2637,11 @@
 		},
 		{
 			"key": "associated_number_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
 			"value": "",
 			"type": "string"
 		}
