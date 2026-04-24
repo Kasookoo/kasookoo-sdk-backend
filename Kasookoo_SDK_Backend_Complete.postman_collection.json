@@ -2065,56 +2065,8 @@
 		},
 		{
 			"name": "Users",
-			"description": "User management, logout, and debug endpoints.",
+			"description": "User management and debug endpoints.",
 			"item": [
-				{
-					"name": "Logout",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{sdk_access_token}}"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/api/v1/users/logout",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"logout"
-							]
-						}
-					}
-				},
-				{
-					"name": "Logout All Devices",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{sdk_access_token}}"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/api/v1/users/logout-all",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"logout-all"
-							]
-						}
-					}
-				},
 				{
 					"name": "List Users",
 					"request": {
@@ -2210,48 +2162,6 @@
 								{
 									"key": "limit",
 									"value": "100"
-								}
-							]
-						}
-					}
-				},
-				{
-					"name": "Random User",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{sdk_access_token}}"
-							},
-							{
-								"key": "X-Organization-Id",
-								"value": "{{organization_id}}"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/api/v1/random-user?skip=0&limit=10",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"random-user"
-							],
-							"query": [
-								{
-									"key": "search",
-									"value": "",
-									"disabled": true
-								},
-								{
-									"key": "skip",
-									"value": "0"
-								},
-								{
-									"key": "limit",
-									"value": "10"
 								}
 							]
 						}
@@ -2365,34 +2275,6 @@
 								"v1",
 								"users",
 								"{{user_id}}"
-							]
-						}
-					}
-				},
-				{
-					"name": "Clerk Signin Hook",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"data\": {\n    \"email_address\": \"newuser@example.com\",\n    \"user_id\": \"clerk_user_123\"\n  }\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/users/clerk-signin-hook",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"users",
-								"clerk-signin-hook"
 							]
 						}
 					}
@@ -2572,12 +2454,12 @@
 	"variable": [
 		{
 			"key": "base_url",
-			"value": "http://localhost:7000",
+			"value": "https://sdk.kasookoo.ai",
 			"type": "string"
 		},
 		{
 			"key": "ws_url",
-			"value": "ws://localhost:7000",
+			"value": "ws://sdk.kasookoo.ai",
 			"type": "string"
 		},
 		{
