@@ -191,7 +191,7 @@ class ParticipantType(str, Enum):
     RECORDER = "recorder"
     ADMIN = "admin"
     CUSTOMER = "customer"
-    DRIVER = "driver"
+    AGENT = "agent"
 
 # --- Define the request data model for validation ---
 class ConnectCallersRequest(BaseModel):
@@ -208,6 +208,23 @@ class TokenRequest(BaseModel):
 class CallerTokenRequest(TokenRequest):
     caller_user_id: Optional[str] = None
     called_user_id: Optional[str] = None
+    device_type: Optional[str] = None
+    is_push_notification: bool = True
+    is_call_recording: Optional[bool] = True
+
+
+class CallTokenParticipantRequest(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    type: Optional[str] = None
+
+
+class CallTokensRequest(BaseModel):
+    room_name: str
+    caller: CallTokenParticipantRequest
+    callee: CallTokenParticipantRequest
     device_type: Optional[str] = None
     is_push_notification: bool = True
     is_call_recording: Optional[bool] = True
@@ -234,8 +251,10 @@ class RejectCallTokenRequest(TokenRequest):
     called_user_id: str
 
 class MessagingTokenRequest(TokenRequest):
-    sender_user_id: str = Field(..., description="User ID of the message sender")
-    receiver_user_id: str = Field(..., description="User ID of the message receiver")
+    sender_user_id: Optional[str] = Field(None, description="User ID of the message sender")
+    receiver_user_id: Optional[str] = Field(None, description="User ID of the message receiver")
+    sender: Optional[CallTokenParticipantRequest] = None
+    receiver: Optional[CallTokenParticipantRequest] = None
     device_type: Optional[str] = None
     is_push_notification: bool = True
 

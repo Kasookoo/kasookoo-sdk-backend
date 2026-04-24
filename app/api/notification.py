@@ -57,7 +57,7 @@ async def register_device_token_proxy(request: RegisterTokenRequest, token: str 
     user = user_service.get_user_by_id(request.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user_type = user.get("role", "driver") or request.user_type
+    user_type = user.get("role", "agent") or request.user_type
     success = await notification__service.register_device_token(
         user_id=request.user_id,
         user_type=user_type,

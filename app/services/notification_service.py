@@ -82,7 +82,7 @@ class DeviceType(str, Enum):
 
 class RegisterTokenRequest(BaseModel):
     user_id: str
-    user_type: str = "driver"
+    user_type: str = "agent"
     device_token: str
     device_type: DeviceType
     new_device_token: Optional[str] = None

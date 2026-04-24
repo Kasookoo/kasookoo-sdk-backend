@@ -204,7 +204,7 @@ class UserService(BaseMongoClient):
         by_role_raw = list(self.collection.aggregate(pipeline))
         by_role_map = {row["_id"]: row["count"] for row in by_role_raw if row.get("_id")}
         total = sum(by_role_map.values())
-        order = ("customer", "driver", "admin")
+        order = ("customer", "agent", "admin")
         by_role = [{"role": r, "count": int(by_role_map.get(r, 0))} for r in order]
         for role, cnt in sorted(by_role_map.items()):
             if role not in order:

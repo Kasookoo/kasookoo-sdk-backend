@@ -14,10 +14,10 @@ from app.services import user_service, notification__service, organization_servi
 from app.services.token_storage_service import token_storage_service
 from app.utils.performance_monitor import monitor
 
-ALLOWED_USER_ROLES = ("customer", "driver", "admin")
+ALLOWED_USER_ROLES = ("customer", "agent", "admin")
 
 
-def normalize_role(role: Optional[str]) -> Literal["customer", "driver", "admin"]:
+def normalize_role(role: Optional[str]) -> Literal["customer", "agent", "admin"]:
     """
     Normalize role value to ensure it's one of the valid roles.
     Handles typos and invalid values by defaulting to "customer".
@@ -28,6 +28,7 @@ def normalize_role(role: Optional[str]) -> Literal["customer", "driver", "admin"
     role_lower = role.lower().strip()
     
     # Direct match
+   
     if role_lower in ALLOWED_USER_ROLES:
         return role_lower  # type: ignore
     
@@ -36,8 +37,8 @@ def normalize_role(role: Optional[str]) -> Literal["customer", "driver", "admin"
         "costumer": "customer",
         "custumer": "customer",
         "customr": "customer",
-        "drver": "driver",
-        "diver": "driver",
+        "drver": "agent",
+        "diver": "agent",
         "admn": "admin",
         "administrator": "admin",
     }
@@ -60,7 +61,7 @@ class UserCreate(BaseModel):
     first_name: str
     last_name: str    
     password: Optional[str] = None
-    role: Literal["customer", "driver", "admin"] = "customer"
+    role: Literal["customer", "agent", "admin"] = "customer"
     caller_id: Optional[str] = None
 
 class UserResponse(BaseModel):
@@ -70,7 +71,7 @@ class UserResponse(BaseModel):
     clerk_id: Optional[str] = None
     first_name: str
     last_name: str
-    role: Literal["customer", "driver", "admin"] = "customer"
+    role: Literal["customer", "agent", "admin"] = "customer"
     caller_id: Optional[str] = None
     organization_id: Optional[str] = None
 
@@ -145,11 +146,11 @@ async def filter_users(
 ):
     current_user_id = await normal_authenticate_token(token)
     logger.info(f"Authenticated user: {current_user_id}")
-    current_user_role = "driver"
+    current_user_role = "agent"
     if current_user_id:
         current_user = user_service.get_user_by_id(current_user_id)
         if current_user:
-            current_user_role = normalize_role(current_user.get("role", "driver"))
+            current_user_role = normalize_role(current_user.get("role", "agent"))
     organization = organization_service.get_organization_by_id(organization_id)
     if not organization:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -163,7 +164,7 @@ async def filter_users(
             filters["role"] = role
     else:
         filters["role"] = current_user_role
-    # When filtering by driver, exclude the current user from the result
+    # When filtering by same role, exclude the current user from the result
     if filters.get("role") == current_user_role:
         try:
             filters["_id"] = {"$ne": ObjectId(current_user_id)}
@@ -297,7 +298,7 @@ async def delete_user(user_id: str, token: str = Depends(oauth2_scheme)):
 @monitor(name="api.users.debug_device_info")
 async def debug_device_info(
     user_id: str,
-    user_type: str = "driver",
+    user_type: str = "agent",
     token: str = Depends(oauth2_scheme)
 ):
     """Debug endpoint to check device information for a user"""

@@ -196,39 +196,6 @@
 					}
 				},
 				{
-					"name": "Get Caller LiveKit Token (full flow)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{sdk_access_token}}"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/api/v1/webrtc/get-caller-livekit-token",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"webrtc",
-								"get-caller-livekit-token"
-							]
-						},
-						"description": "Caller token with user lookup and optional push. Requires valid SDK JWT (no scope list enforced beyond session).",
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"participant_identity\": \"caller_user_123\",\n  \"participant_identity_name\": \"John Doe\",\n  \"participant_identity_type\": \"customer\",\n  \"room_name\": \"call_room_123\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
-						}
-					}
-				},
-				{
 					"name": "Get Call Tokens",
 					"request": {
 						"method": "POST",
@@ -240,6 +207,11 @@
 							{
 								"key": "Authorization",
 								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Tenant id for org-scoped user lookup (email upsert). Can also come from SDK JWT organization_id claim."
 							}
 						],
 						"url": {
@@ -254,10 +226,10 @@
 								"get-call-tokens"
 							]
 						},
-						"description": "Same caller flow as get-caller-token; requires scope webrtc:token:create.",
+						"description": "CallTokensRequest: explicit caller + callee profiles. If caller.id / callee.id exist, users are updated; otherwise users are resolved by organization_id + email, or created. Requires scope webrtc:token:create. Use type \"agent\" (legacy \"driver\" is normalized to agent server-side).",
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"participant_identity\": \"caller_user_123\",\n  \"participant_identity_name\": \"John Doe\",\n  \"participant_identity_type\": \"caller\",\n  \"room_name\": \"call_room_123\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
+							"raw": "{\n  \"room_name\": \"call_room_123\",\n  \"caller\": {\n    \"id\": \"{{caller_user_object_id}}\",\n    \"name\": \"John Caller\",\n    \"email\": \"caller@example.com\",\n    \"phone_number\": \"+15550001111\",\n    \"type\": \"agent\"\n  },\n  \"callee\": {\n    \"id\": \"{{callee_user_object_id}}\",\n    \"name\": \"Jane Callee\",\n    \"email\": \"callee@example.com\",\n    \"phone_number\": \"+15550002222\",\n    \"type\": \"customer\"\n  },\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
 						}
 					}
 				},
@@ -292,72 +264,6 @@
 							"mode": "raw",
 							"raw": "{\n  \"room_name\": \"call_room_guest\",\n  \"participant_identity\": \"guest_session_1\",\n  \"participant_identity_name\": \"Guest\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"web\",\n  \"is_push_notification\": false,\n  \"is_call_recording\": true\n}"
 						}
-					}
-				},
-				{
-					"name": "Get Caller Token",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{sdk_access_token}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"participant_identity\": \"caller_user_123\",\n  \"participant_identity_name\": \"John Doe\",\n  \"participant_identity_type\": \"caller\",\n  \"room_name\": \"call_room_123\",\n  \"caller_user_id\": \"caller_user_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/webrtc/get-caller-token",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"webrtc",
-								"get-caller-token"
-							]
-						},
-						"description": "Generate LiveKit access token for caller and initiate call session"
-					}
-				},
-				{
-					"name": "Get Called Token",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Authorization",
-								"value": "Bearer {{sdk_access_token}}"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"participant_identity\": \"called_user_456\",\n  \"participant_identity_name\": \"Jane Smith\",\n  \"participant_identity_type\": \"customer\",\n  \"room_name\": \"call_room_123\",\n  \"called_user_id\": \"called_user_456\",\n  \"is_call_recording\": true\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/v1/webrtc/get-called-token",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"v1",
-								"webrtc",
-								"get-called-token"
-							]
-						},
-						"description": "Generate LiveKit access token for called user"
 					}
 				},
 				{
@@ -1165,10 +1071,10 @@
 								"get-token"
 							]
 						},
-						"description": "Scope messaging:token:create.",
+						"description": "MessagingTokenRequest: optional nested sender/receiver (same shape as get-call-tokens participants). If sender_user_id/receiver_user_id are set, users are updated when found; else resolve by X-Organization-Id + email, else create. Legacy sender_user_id/receiver_user_id-only requests still work. Scope messaging:token:create.",
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"room_name\": \"chat_room_123\",\n  \"participant_identity\": \"user123\",\n  \"participant_identity_name\": \"John\",\n  \"participant_identity_type\": \"caller\",\n  \"sender_user_id\": \"user123\",\n  \"receiver_user_id\": \"user456\",\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true\n}"
+							"raw": "{\n  \"room_name\": \"chat_room_123\",\n  \"participant_identity\": \"{{messaging_sender_object_id}}\",\n  \"participant_identity_name\": \"John Sender\",\n  \"participant_identity_type\": \"customer\",\n  \"sender_user_id\": \"{{messaging_sender_object_id}}\",\n  \"receiver_user_id\": \"{{messaging_receiver_object_id}}\",\n  \"sender\": {\n    \"id\": \"{{messaging_sender_object_id}}\",\n    \"name\": \"John Sender\",\n    \"email\": \"sender@example.com\",\n    \"phone_number\": \"+15550001111\",\n    \"type\": \"customer\"\n  },\n  \"receiver\": {\n    \"id\": \"{{messaging_receiver_object_id}}\",\n    \"name\": \"Jane Receiver\",\n    \"email\": \"receiver@example.com\",\n    \"phone_number\": \"+15550002222\",\n    \"type\": \"agent\"\n  },\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true\n}"
 						}
 					}
 				},

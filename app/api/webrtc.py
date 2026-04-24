@@ -2,24 +2,20 @@ import asyncio
 import os
 import time
 from typing import List, Optional, Tuple
-from datetime import datetime
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi.params import Depends
 
 from app.config import LIVEKIT_SDK_URL, LIVEKIT_SDK_API_KEY, LIVEKIT_SDK_API_SECRET, ANONYMOUS_GUEST_CALL_ADMIN_EMAIL
-from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, Request, Header
-import jwt
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect, Request, Header
 from livekit import api
 from livekit.api import DeleteRoomRequest, webhook, TokenVerifier
 from google.protobuf.json_format import MessageToDict
 import logging
-from app.models.models import CallRequest, CalledTokenRequest, CallerTokenRequest, AnonymousCallerTokenRequest, RecordingRequest, CallStatusResponse, RejectCallTokenRequest, TokenRequest, TokenResponse, CallerTokenResponse, ParticipantType, MessagingTokenRequest
+from app.models.models import CallRequest, CallerTokenRequest, AnonymousCallerTokenRequest, RecordingRequest, CallStatusResponse, RejectCallTokenRequest, TokenRequest, TokenResponse, ParticipantType, MessagingTokenRequest, CallTokensRequest
 from app.services import user_service, notification__service, associated_number_service, organization_service
 from app.services.notification_service import DataMessageRequest, NotificationPriority, SendNotificationRequest
-from app.config import LIVEKIT_URL
 from app.services.call_manager import WebRTCCallManager
 from app.services.recording_manager import LiveKitS3RecordingManager
 from app.services.token_service import TokenService
@@ -107,6 +103,92 @@ def _build_room_token(room_name: str, participant_identity: str, participant_nam
     access_token.with_name(participant_name or participant_identity)
     access_token.with_grants(video_grant)
     return access_token.to_jwt()
+
+
+def _split_name(full_name: Optional[str]) -> Tuple[str, str]:
+    normalized = (full_name or "").strip()
+    if not normalized:
+        return "User", ""
+    parts = normalized.split()
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
+
+async def _upsert_call_participant_user(
+    participant,
+    label: str,
+    organization_id: Optional[str] = None,
+) -> Tuple[str, str, str]:
+    """
+    Upsert a user for call-tokens flow:
+    - if participant id is provided and user exists, update user profile fields
+    - otherwise create a new user from participant payload
+    Returns (user_id, display_name, role).
+    """
+    participant_name = (participant.name or "").strip() or "User"
+    participant_email = (participant.email or "").strip().lower()
+    participant_phone = (participant.phone_number or "").strip()
+    participant_role = (participant.type or "customer").strip().lower() or "customer"
+
+    if participant.id:
+        participant_id = _validate_object_id(participant.id, f"{label}.id")
+        existing_user = user_service.get_user_by_id(participant_id, organization_id=organization_id)
+        if existing_user:
+            first_name, last_name = _split_name(participant_name)
+            updated_user = user_service.update_user(
+                participant_id,
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": participant_email,
+                    "phone_number": participant_phone,
+                    "role": participant_role,
+                },
+            )
+            if updated_user:
+                user_name = _format_user_name(updated_user)
+                user_role = (updated_user.get("role") or participant_role or "customer").strip().lower()
+                return participant_id, user_name, user_role
+
+    # When ID is absent (or not found), resolve by organization + email first.
+    if organization_id and participant_email:
+        existing_by_email = user_service.get_user_by_email(participant_email, organization_id=organization_id)
+        if existing_by_email:
+            existing_user_id = str(existing_by_email["_id"])
+            first_name, last_name = _split_name(participant_name)
+            updated_user = user_service.update_user(
+                existing_user_id,
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": participant_email,
+                    "phone_number": participant_phone,
+                    "role": participant_role,
+                },
+            )
+            if updated_user:
+                user_name = _format_user_name(updated_user)
+                user_role = (updated_user.get("role") or participant_role or "customer").strip().lower()
+                return existing_user_id, user_name, user_role
+
+    first_name, last_name = _split_name(participant_name)
+    if not participant_email:
+        participant_email = f"{label}-{int(time.time() * 1000)}@kasookoo.local"
+    generated_password = f"lk-{label}-{int(time.time() * 1000)}"
+    created_user = await user_service.create_user(
+        email=participant_email,
+        phone_number=participant_phone,
+        first_name=first_name,
+        last_name=last_name,
+        role=participant_role,
+        password=generated_password,
+        organization_id=organization_id,
+    )
+    created_user_id = str(created_user["_id"])
+    created_user_name = _format_user_name(created_user)
+    created_user_role = (created_user.get("role") or participant_role or "customer").strip().lower()
+    return created_user_id, created_user_name, created_user_role
 
 
 async def _handle_sip_inbound_mapping_from_webhook(webhook_data: dict) -> None:
@@ -243,7 +325,12 @@ async def _delete_livekit_room(room_name: str) -> bool:
     
     try:
         logger.info({"event": "deleting_livekit_room", "room_name": room_name})
-        await room_service.delete_room(DeleteRoomRequest(room=room_name))
+        lkapi = api.LiveKitAPI(
+            url=LIVEKIT_SDK_URL,
+            api_key=LIVEKIT_SDK_API_KEY,
+            api_secret=LIVEKIT_SDK_API_SECRET,
+        )
+        await lkapi.room.delete_room(DeleteRoomRequest(room=room_name))
         logger.info({"event": "livekit_room_deleted", "room_name": room_name})
         return True
     except Exception as e:
@@ -310,296 +397,95 @@ async def get_token_endpoint(request: TokenRequest):
     logger.info({"event": "jwt_generated", "jwt_length": len(jwt)})  # Don't log full JWT for security
     return TokenResponse(accessToken=jwt, wsUrl=LIVEKIT_SDK_URL)
 
-# --- API Endpoint to Generate a Token ---
-@router.post("/webrtc/get-caller-livekit-token")
-@monitor(name="api.sdk.get_caller_livekit_token")
-async def get_caller_livekit_token(
-    request: CallerTokenRequest,
+
+
+async def _prepare_explicit_call_tokens_flow(
+    request: CallTokensRequest,
     background_tasks: BackgroundTasks,
-    manager: WebRTCCallManager = Depends(get_call_manager),
-    _principal: dict = Depends(authenticate_sdk_user),
-):
+    manager: WebRTCCallManager,
+    organization_id: Optional[str] = None,
+) -> Tuple[str, str, str]:
     """
-    Generates a LiveKit access token with specific permissions.
-    For a 'monitor-client', we disable publishing rights.
+    Shared logic for get-call-tokens endpoint when both caller/callee payloads are explicitly provided.
     """
-    logger.info({"event": "get_caller_livekit_token_request", "request": request.dict() if hasattr(request, 'dict') else str(request)})
-    logger.info({"event": "device_type_received", "device_type": request.device_type})
-    logger.info({"event": "caller_user_id_found", "caller_user_id": request.caller_user_id})
-    participant_identity_type = request.participant_identity_type
-    device_type = request.device_type
-    if participant_identity_type == "driver":
-        user = user_service.get_user_by_id(request.caller_user_id)
-        if user:
-            request.participant_identity = request.caller_user_id
-            user_name = _format_user_name(user)
-            if user_name:
-                request.participant_identity_name = user_name
-        else:
-            raise HTTPException(status_code=404, detail="No driver record found") 
-        customer_user_id = request.called_user_id
-        if not customer_user_id:
-            raise HTTPException(status_code=400, detail="called_user_id is required for driver calls")
-        customer_user = user_service.get_user_by_id(customer_user_id)
-        if not customer_user:
-            raise HTTPException(status_code=404, detail="Customer user record not found")
-        customer_name = _format_user_name(customer_user)
-        title=f"Incoming Call from {user_name}"
-        body=f"Please answer the call from {user_name}"
-        data={  # Optional additional data
-            "title": title,
-            "body": body,
-            "type": "driver_incoming_call",
-            "action": "receive_call",
-            "room_name": request.room_name,
-            "participant_identity": customer_user_id,
-            "participant_identity_name": customer_name,
-            "participant_identity_type": "customer",
-            "called_user_id": customer_user_id,
-            "caller_user_id": request.caller_user_id,
-            "is_call_recording": str(request.is_call_recording).lower()
-        }
-        fcm_tokens = await notification__service.get_user_tokens(customer_user_id, "customer")
-
-    elif participant_identity_type == "customer":
-        customer_user = user_service.get_user_by_id(request.caller_user_id)
-        if customer_user:
-            request.participant_identity = request.caller_user_id
-            customer_name = _format_user_name(customer_user)
-            if customer_name:
-                request.participant_identity_name = customer_name
-        else:
-            raise HTTPException(status_code=404, detail="No customer record found")
-        user_id = request.called_user_id
-        if not user_id:
-            raise HTTPException(status_code=400, detail="called_user_id is required for customer calls")
-        user = user_service.get_user_by_id(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="No driver record found for customer")
-        user_id = str(user.get("_id"))
-        user_name = _format_user_name(user)
-        
-        title=f"Incoming Call from {customer_name}"
-        body=f"Please answer the call from {customer_name}"
-        data={  # Optional additional data
-            "title": title,
-            "body": body,
-            "type": "customer_incoming_call",
-            "action": "receive_call",
-            "room_name": request.room_name,
-            "participant_identity": user_id,
-            "participant_identity_name": user_name,
-            "participant_identity_type": "driver",
-            "called_user_id": user_id,
-            "caller_user_id": request.caller_user_id,
-            "is_call_recording": str(request.is_call_recording).lower()
-        }
-        fcm_tokens = await notification__service.get_user_tokens(user_id, "driver")
-
-    if not fcm_tokens:
-            error_message = f"No FCM tokens found for user ID: {request.caller_user_id}"
-            logger.warning(error_message)
-            raise HTTPException(status_code=404, detail=error_message)    
-    prepare_notification = await notification__service.prepare_notification(
-        fcm_tokens=fcm_tokens,       
-        title=title,
-        body=body,
-        data=data,
-        is_push_notification=request.is_push_notification,
-        caller_user_id=request.caller_user_id,
-        background_tasks=background_tasks
+    caller_id, caller_name, caller_type = await _upsert_call_participant_user(
+        request.caller, "caller", organization_id=organization_id
+    )
+    callee_id, callee_name, callee_type = await _upsert_call_participant_user(
+        request.callee, "callee", organization_id=organization_id
     )
 
-    logger.info({"event": "prepare_notification_result", "result": prepare_notification})
-
-    """
-    logger.info(f"FCM tokens found: {fcm_tokens}")
-    logger.info(f"is_push_notification: {request.is_push_notification}")
-    if request.is_push_notification:
-        logger.info(f"Title: {title} Body: {body} Data: {data}")
-        # Create notification request
-        notification_request = SendNotificationRequest(
-            user_ids=[request.caller_user_id],   # List[str]
-            device_tokens=fcm_tokens,            # List[str]
-            title=title,                         # str
-            body=body,                           # str
-            data=data,                           # Optional[dict]
-            priority=NotificationPriority.HIGH   # Enum
-        )
-        logger.info(f"Notification request: {notification_request}")
-        # Send notification
-        result = await notification__service.send__notification(
-            request=notification_request,
-            background_tasks=background_tasks
-        )
-    else:
-        logger.info(f"Data notifcation : {data}")
-
-        data_message_request = DataMessageRequest(
-            user_ids=[request.caller_user_id],   # List[str]
-            device_tokens=fcm_tokens,            # List[str]
-            data=data,                           # Optional[dict]
-            priority=NotificationPriority.HIGH   # Enum
-        )
-        result = await notification__service.send_data_message(
-            request=data_message_request,
-            background_tasks=background_tasks
-        )
-
-    logger.info(f"Notification result: {result}")
-    """
-    #Create livekit token for caller
-    request.participant_identity_type = ParticipantType.CALLER
-    return await get_token_endpoint(request)
-
-
-async def _prepare_caller_call_flow(
-    request: CallerTokenRequest,
-    background_tasks: BackgroundTasks,
-    manager: WebRTCCallManager
-) -> Tuple[str, str]:
-    """
-    Shared logic for caller token endpoints to avoid duplication.
-    Prepares notification payload, validates users, and schedules call session.
-    Returns (called_user_name, called_user_role).
-    """
-    logger.info({"event": "get_caller_livekit_token_request", "request": request.dict() if hasattr(request, 'dict') else str(request)})
-    logger.info({"event": "device_type_received", "device_type": request.device_type})
-    logger.info({"event": "caller_user_id_found", "caller_user_id": request.caller_user_id})
-
-    request.caller_user_id = _validate_object_id(request.caller_user_id, "caller_user_id")
-    request.called_user_id = _validate_object_id(request.called_user_id, "called_user_id")
-
-    caller_user = user_service.get_user_by_id(request.caller_user_id)
-    if caller_user:
-        request.participant_identity = request.caller_user_id
-        caller_user_role = caller_user.get("role", "customer")        
-        caller_user_name = caller_user.get("first_name", "User") + " " + caller_user.get("last_name", "")
-        if caller_user_name:
-            request.participant_identity_name = caller_user_name
-        request.participant_identity_type = ParticipantType.CALLER
-    else:
-        raise HTTPException(status_code=404, detail="No driver record found")
-
-    called_user = user_service.get_user_by_id(request.called_user_id)
-    if not called_user:
-        raise HTTPException(status_code=404, detail="No active customer record found for driver")
-
-    called_user_name = called_user.get("first_name", "User") + " " + called_user.get("last_name", "")
-    called_user_role = called_user.get("role", "customer")
-    logger.info({"event": "called_user_found", "called_user_name": called_user_name, "called_user_role": called_user_role})
-
-    if((caller_user_role == "admin") and (called_user_role == "customer")):
-        caller_user_role = "driver"
-    elif((caller_user_role == "admin") and (called_user_role == "driver")):
-        caller_user_role = "customer"
-
-    # Use caller's organization_id (or callee's as fallback) for call session
-    organization_id = None
-    if caller_user and caller_user.get("organization_id"):
-        organization_id = str(caller_user.get("organization_id"))
-    elif called_user and called_user.get("organization_id"):
-        organization_id = str(called_user.get("organization_id"))
-
     call_request = CallRequest(
-        caller_id=request.caller_user_id,
-        callee_id=request.called_user_id,
+        caller_id=caller_id,
+        callee_id=callee_id,
         room_name=request.room_name,
         auto_record=request.is_call_recording or False,
         recording_options={"width": 1920, "height": 1080},
         caller_participant={
-            "id": request.caller_user_id,
-            "name": caller_user_name,
-            "phone_number": caller_user.get("phone_number", ""),
-            "email": caller_user.get("email", ""),
-            "role": caller_user_role
+            "id": caller_id,
+            "name": caller_name,
+            "phone_number": request.caller.phone_number,
+            "email": request.caller.email,
+            "role": caller_type
         },
         callee_participant={
-            "id": request.called_user_id,
-            "name": called_user_name,
-            "phone_number": called_user.get("phone_number", ""),
-            "email": called_user.get("email", ""),
-            "role": called_user_role
+            "id": callee_id,
+            "name": callee_name,
+            "phone_number": request.callee.phone_number,
+            "email": request.callee.email,
+            "role": callee_type
         }
     )
-    
-    asyncio.create_task(
-        manager.initiate_call_session(call_request, organization_id=organization_id)
-    )
+    asyncio.create_task(manager.initiate_call_session(call_request, organization_id=None))
 
-    title = f"Incoming Call from {request.participant_identity_name}"
-    body = f"Please answer the call from {request.participant_identity_name}"
+    title = f"Incoming Call from {caller_name}"
+    body = f"Please answer the call from {caller_name}"
     called_token_request = TokenRequest(
         room_name=request.room_name,
-        participant_identity=request.called_user_id,
-        participant_identity_name=called_user_name,
+        participant_identity=callee_id,
+        participant_identity_name=callee_name,
         participant_identity_type=ParticipantType.CALLEE
-    )    
+    )
 
-    # Run notification preparation asynchronously in background
     async def _send_notification_async():
-        """Helper function to prepare notification data and send notification asynchronously"""
         try:
-            # Generate token synchronously (needed for return value)
             called_token_response = await get_token_endpoint(called_token_request)
-            
-            # Prepare notification data asynchronously (FCM tokens + data preparation)
-            async def _prepare_notification_data_async():
-                """Async block to prepare FCM tokens and notification data"""
-                # Fetch FCM tokens
-                fcm_tokens = await notification__service.get_user_tokens(request.called_user_id, called_user_role)
-                logger.info({"event": "fcm_tokens_found", "token_count": len(fcm_tokens), "tokens": fcm_tokens})
-                
-                # Validate FCM tokens
-                if not fcm_tokens:
-                    error_message = "The called user is offline you cannot call them right now"
-                    logger.warning(error_message)
-                    # Note: We log the error but don't fail the request since this runs in background
-                    return None, None
-                
-                # Prepare notification data
-                data = {
-                    "title": title,
-                    "body": body,
-                    "type": f"{caller_user_role}_incoming_call",
-                    "action": "receive_call",
-                    "room_name": request.room_name,
-                    "participant_identity": request.called_user_id,
-                    "participant_identity_name": caller_user_name,
-                    "participant_identity_type": caller_user_role,
-                    "called_user_id": request.called_user_id,
-                    "caller_user_id": request.caller_user_id,
-                    "is_call_recording": str(request.is_call_recording).lower(),
-                    "accessToken": called_token_response.accessToken,
-                    "wsUrl": called_token_response.wsUrl
-                }
-                
-                return fcm_tokens, data
-            
-            # Prepare notification data
-            fcm_tokens, data = await _prepare_notification_data_async()
-            
-            # Only send notification if FCM tokens are available
-            if fcm_tokens and data:
-                prepare_notification = await notification__service.prepare_notification(
-                    fcm_tokens=fcm_tokens,
-                    title=title,
-                    body=body,
-                    data=data,
-                    is_push_notification=request.is_push_notification,
-                    caller_user_id=request.caller_user_id,
-                    background_tasks=background_tasks
-                )
-                logger.info({"event": "prepare_notification_result", "result": prepare_notification})
-            else:
-                logger.warning({"event": "notification_skipped", "reason": "no_fcm_tokens", "room_name": request.room_name})
+            fcm_tokens = await notification__service.get_user_tokens(callee_id, callee_type)
+            logger.info({"event": "fcm_tokens_found", "token_count": len(fcm_tokens), "tokens": fcm_tokens})
+            if not fcm_tokens:
+                logger.warning("The called user is offline you cannot call them right now")
+                return
+
+            data = {
+                "title": title,
+                "body": body,
+                "type": f"{caller_type}_incoming_call",
+                "action": "receive_call",
+                "room_name": request.room_name,
+                "participant_identity": callee_id,
+                "participant_identity_name": caller_name,
+                "participant_identity_type": caller_type,
+                "called_user_id": callee_id,
+                "caller_user_id": caller_id,
+                "is_call_recording": str(request.is_call_recording).lower(),
+                "accessToken": called_token_response.accessToken,
+                "wsUrl": called_token_response.wsUrl
+            }
+            prepare_notification = await notification__service.prepare_notification(
+                fcm_tokens=fcm_tokens,
+                title=title,
+                body=body,
+                data=data,
+                is_push_notification=request.is_push_notification,
+                caller_user_id=caller_id,
+                background_tasks=background_tasks
+            )
+            logger.info({"event": "prepare_notification_result", "result": prepare_notification})
         except Exception as e:
             logger.error({"event": "notification_preparation_failed", "error": str(e), "room_name": request.room_name})
 
-    # Schedule notification preparation as background task (non-blocking)
     asyncio.create_task(_send_notification_async())
-
-    return called_user_name, called_user_role
+    return caller_id, callee_id, caller_name
 
 
 async def _prepare_anonymous_caller_call_flow(
@@ -722,43 +608,35 @@ async def _prepare_anonymous_caller_call_flow(
     return called_user_name, called_user_role
 
 
-@router.post("/webrtc/get-caller-token")
-@monitor(name="api.webrtc.get_caller_token")
-async def get_caller_token(
-    request: CallerTokenRequest,
-    background_tasks: BackgroundTasks,
-    manager: WebRTCCallManager = Depends(get_call_manager),
-    _principal: dict = Depends(intercept_sdk_access(["webrtc:token:create"])),
-):
-    """
-    Generates a LiveKit access token with specific permissions.
-    For a 'monitor-client', we disable publishing rights.
-    """
-    called_user_name, called_user_role = await _prepare_caller_call_flow(request, background_tasks, manager)
-    return await get_token_endpoint(request)
-
-
 @router.post("/webrtc/get-call-tokens")
 @monitor(name="api.webrtc.get_call_tokens")
 async def get_call_tokens(
-    request: CallerTokenRequest,
+    request: CallTokensRequest,
     background_tasks: BackgroundTasks,
     manager: WebRTCCallManager = Depends(get_call_manager),
     _principal: dict = Depends(intercept_sdk_access(["webrtc:token:create"])),
 ) -> TokenResponse:
     """
-    Extended version of caller token API that also returns the called participant's token.
+    Returns caller token and asynchronously prepares callee notification/token using explicit caller/callee payloads.
     """
-    called_user_name, called_user_role = await _prepare_caller_call_flow(
-        request, background_tasks, manager
+    organization_id = (_principal or {}).get("organization_id") or (_principal or {}).get("org_id")
+    caller_id, callee_id, caller_name = await _prepare_explicit_call_tokens_flow(
+        request, background_tasks, manager, organization_id=organization_id
     )
 
-    caller_token_response = await get_token_endpoint(request)
+    caller_token_response = await get_token_endpoint(
+        TokenRequest(
+            room_name=request.room_name,
+            participant_identity=caller_id,
+            participant_identity_name=caller_name,
+            participant_identity_type=ParticipantType.CALLER
+        )
+    )
 
     logger.info({
         "event": "get-call-tokens",
-        "caller_identity": request.participant_identity,
-        "called_identity": request.called_user_id,
+        "caller_identity": caller_id,
+        "called_identity": callee_id,
         "room_name": request.room_name
     })    
     return caller_token_response
@@ -1034,52 +912,6 @@ async def _prepare_messaging_flow(
     
     return sender_token_response
 
-
-
-@router.post("/webrtc/get-called-token")
-@monitor(name="api.webrtc.get_called_token")
-async def get_called_token(
-    request: CalledTokenRequest,
-    manager: WebRTCCallManager = Depends(get_call_manager),
-    _principal: dict = Depends(intercept_sdk_access(["webrtc:token:create"])),
-):
-    """
-    Generates a LiveKit access token with specific permissions.
-    For a 'monitor-client', we disable publishing rights.
-    """
-    try:
-        user = user_service.get_user_by_id(request.called_user_id)
-    except InvalidId:
-        user = None
-
-    if user:
-        request.participant_identity = request.called_user_id
-        user_name = _format_user_name(user)
-        if user_name.strip():
-            request.participant_identity_name = user_name.strip()
-        request.participant_identity_type = ParticipantType.CALLEE
-    else:
-        raise HTTPException(status_code=404, detail="Called user not found")
-    logger.info(f"User: {user_name} with ID: {request.called_user_id}")
-    request_data = CallRequest(
-        caller_id="caller",
-        callee_id=request.participant_identity,
-        room_name=request.room_name,
-        auto_record=request.is_call_recording,
-        recording_options={"width": 1920, "height": 1080}
-    )
-    asyncio.create_task(
-        manager.update_call_session(request_data)
-    )
-    logger.info({"event": "call_request_data", "request_data": request_data.dict() if hasattr(request_data, 'dict') else str(request_data)})
-    if request_data.auto_record:
-        recording_options = request_data.recording_options
-                
-        # Start recording after a delay to ensure participants join
-        asyncio.create_task(
-            manager._delayed_recording_start(request.room_name, recording_options, delay=5)
-        )
-    return await get_token_endpoint(request)
 
 
 @router.post("/webrtc/calls/{room_name}/end")
@@ -1359,7 +1191,7 @@ async def reject_call(
         if caller_user:
             participant_identity_type = caller_user.get("role", "customer")
         else:
-            participant_identity_type = "driver" if request.participant_identity_type == "customer" else "customer"
+            participant_identity_type = "agent" if request.participant_identity_type == "customer" else "customer"
         title="Reject Incoming Call"
         body="Rejecting incoiming the call"
         data={  
@@ -1422,7 +1254,7 @@ async def caller_end_call(
         if called_user:
             participant_identity_type = called_user.get("role", "customer")
         else:
-            participant_identity_type = "driver" if request.participant_identity_type == "customer" else "customer"        
+            participant_identity_type = "agent" if request.participant_identity_type == "customer" else "customer"        
         title="End Call by Caller"
         body="End the call by the caller before connecting"
         
