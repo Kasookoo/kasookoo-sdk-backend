@@ -62,48 +62,6 @@
 					}
 				},
 				{
-					"name": "Get Access Token (Deprecated)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/x-www-form-urlencoded"
-							}
-						],
-						"body": {
-							"mode": "urlencoded",
-							"urlencoded": [
-								{
-									"key": "grant_type",
-									"value": "password",
-									"description": "OAuth2 grant type"
-								},
-								{
-									"key": "username",
-									"value": "fairmoney",
-									"description": "Username for authentication"
-								},
-								{
-									"key": "password",
-									"value": "@@FairmonyKasookoo123456",
-									"description": "Password for authentication"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{base_url}}/token",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"token"
-							]
-						},
-						"description": "Login to get JWT access token (Deprecated - use static API key instead)"
-					}
-				},
-				{
 					"name": "Introspect SDK Token",
 					"request": {
 						"method": "GET",
