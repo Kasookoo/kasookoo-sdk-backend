@@ -100,15 +100,19 @@ def _get_session(sid: str) -> Optional[Dict[str, Any]]:
 
 def _decode_sdk_token(token: str) -> Dict[str, Any]:
     try:
-        payload = jwt.decode(
-            token,
-            _get_verify_key(),
-            algorithms=[ALGORITHM],
-            audience=SDK_TOKEN_AUDIENCE if SDK_TOKEN_AUDIENCE else None,
-            issuer=SDK_TOKEN_ISSUER if SDK_TOKEN_ISSUER else None,
-            options={"require_exp": True, "require_iat": True},
-            leeway=SDK_TOKEN_LEEWAY_SECONDS,
-        )
+        decode_kwargs: Dict[str, Any] = {
+            "algorithms": [ALGORITHM],
+            "audience": SDK_TOKEN_AUDIENCE if SDK_TOKEN_AUDIENCE else None,
+            "issuer": SDK_TOKEN_ISSUER if SDK_TOKEN_ISSUER else None,
+            "options": {"require_exp": True, "require_iat": True},
+            "leeway": SDK_TOKEN_LEEWAY_SECONDS,
+        }
+        try:
+            payload = jwt.decode(token, _get_verify_key(), **decode_kwargs)
+        except TypeError:
+            # Backward-compat for jose versions that don't support `leeway` kwarg.
+            decode_kwargs.pop("leeway", None)
+            payload = jwt.decode(token, _get_verify_key(), **decode_kwargs)
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid SDK token")
 
