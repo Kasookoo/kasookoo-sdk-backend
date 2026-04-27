@@ -4,12 +4,13 @@ from typing import List, Literal, Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from app.api.auth import (
     oauth2_scheme,
     authenticate_token as normal_authenticate_token,
     get_organization_id,
 )
+from app.security.interceptor import authenticate_sdk_user
 from app.services import user_service, notification__service, organization_service
 from app.services.token_storage_service import token_storage_service
 from app.utils.performance_monitor import monitor
@@ -77,6 +78,36 @@ class UserResponse(BaseModel):
 
     #customer_id: Optional[str] = None
     #customer_name: Optional[str] = None
+
+
+class SDKIdentifyRequest(BaseModel):
+    name: str
+    email: EmailStr
+    phone_number: Optional[str] = Field(None, alias="phoneNumber")
+    type: Literal["customer", "agent", "admin"] = "customer"
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+class SDKIdentifyResponse(BaseModel):
+    id: str
+    name: str
+    email: EmailStr
+    phone_number: Optional[str] = None
+    role: Literal["customer", "agent", "admin"] = "customer"
+    organization_id: Optional[str] = None
+    created: bool
+
+
+def _split_full_name(full_name: Optional[str]) -> tuple[str, str]:
+    normalized = (full_name or "").strip()
+    if not normalized:
+        return "User", ""
+    parts = normalized.split()
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
 
 
 
@@ -200,6 +231,73 @@ async def filter_users(
         }
         for user in users
     ]
+
+
+@router.post("/users/identify", response_model=SDKIdentifyResponse)
+@monitor(name="api.users.identify_sdk_user")
+async def identify_sdk_user(
+    request: SDKIdentifyRequest,
+    principal: dict = Depends(authenticate_sdk_user),
+):
+    """
+    Upsert user profile for SDK identify flow:
+    - update user fields when email already exists in tenant
+    - create user otherwise
+    """
+    organization_id = (principal or {}).get("organization_id") or (principal or {}).get("org_id")
+    if not organization_id:
+        default_org = organization_service.get_or_create_default_organization()
+        organization_id = str(default_org["_id"])
+
+    normalized_email = str(request.email).strip().lower()
+    first_name, last_name = _split_full_name(request.name)
+    role = normalize_role(request.type)
+
+    existing_user = user_service.get_user_by_email(normalized_email, organization_id=organization_id)
+    if existing_user:
+        existing_user_id = str(existing_user["_id"])
+        updated_user = user_service.update_user(
+            existing_user_id,
+            {
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": normalized_email,
+                "phone_number": request.phone_number,
+                "role": role,
+            },
+        )
+        if not updated_user:
+            raise HTTPException(status_code=500, detail="Failed to update user")
+        display_name = f"{updated_user.get('first_name', '')} {updated_user.get('last_name', '')}".strip() or normalized_email
+        return {
+            "id": existing_user_id,
+            "name": display_name,
+            "email": updated_user["email"],
+            "phone_number": updated_user.get("phone_number"),
+            "role": normalize_role(updated_user.get("role")),
+            "organization_id": str(updated_user.get("organization_id", organization_id)),
+            "created": False,
+        }
+
+    created_user = await user_service.create_user(
+        email=normalized_email,
+        phone_number=request.phone_number or "",
+        first_name=first_name,
+        last_name=last_name,
+        role=role,
+        password=f"sdk-identify-{random.randint(100000, 999999)}",
+        organization_id=organization_id,
+    )
+    display_name = f"{created_user.get('first_name', '')} {created_user.get('last_name', '')}".strip() or normalized_email
+    return {
+        "id": str(created_user["_id"]),
+        "name": display_name,
+        "email": created_user["email"],
+        "phone_number": created_user.get("phone_number"),
+        "role": normalize_role(created_user.get("role")),
+        "organization_id": str(created_user.get("organization_id", organization_id)),
+        "created": True,
+    }
 
 
 @router.post("/users/create", response_model=UserResponse)

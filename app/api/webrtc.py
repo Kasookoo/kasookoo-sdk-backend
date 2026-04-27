@@ -122,7 +122,7 @@ async def _upsert_call_participant_user(
 ) -> Tuple[str, str, str]:
     """
     Upsert a user for call-tokens flow:
-    - if participant id is provided and user exists, update user profile fields
+    - resolve by organization + participant email and update user profile fields when found
     - otherwise create a new user from participant payload
     Returns (user_id, display_name, role).
     """
@@ -130,26 +130,8 @@ async def _upsert_call_participant_user(
     participant_email = (participant.email or "").strip().lower()
     participant_phone = (participant.phone_number or "").strip()
     participant_role = (participant.type or "customer").strip().lower() or "customer"
-
-    if participant.id:
-        participant_id = _validate_object_id(participant.id, f"{label}.id")
-        existing_user = user_service.get_user_by_id(participant_id, organization_id=organization_id)
-        if existing_user:
-            first_name, last_name = _split_name(participant_name)
-            updated_user = user_service.update_user(
-                participant_id,
-                {
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "email": participant_email,
-                    "phone_number": participant_phone,
-                    "role": participant_role,
-                },
-            )
-            if updated_user:
-                user_name = _format_user_name(updated_user)
-                user_role = (updated_user.get("role") or participant_role or "customer").strip().lower()
-                return participant_id, user_name, user_role
+    if not participant_email:
+        raise HTTPException(status_code=400, detail=f"{label}.email is required")
 
     # When ID is absent (or not found), resolve by organization + email first.
     if organization_id and participant_email:
@@ -173,8 +155,6 @@ async def _upsert_call_participant_user(
                 return existing_user_id, user_name, user_role
 
     first_name, last_name = _split_name(participant_name)
-    if not participant_email:
-        participant_email = f"{label}-{int(time.time() * 1000)}@kasookoo.local"
     generated_password = f"lk-{label}-{int(time.time() * 1000)}"
     created_user = await user_service.create_user(
         email=participant_email,
@@ -404,7 +384,7 @@ async def _prepare_explicit_call_tokens_flow(
     background_tasks: BackgroundTasks,
     manager: WebRTCCallManager,
     organization_id: Optional[str] = None,
-) -> Tuple[str, str, str]:
+) -> Tuple[str, str, str, str, str]:
     """
     Shared logic for get-call-tokens endpoint when both caller/callee payloads are explicitly provided.
     """
@@ -440,9 +420,12 @@ async def _prepare_explicit_call_tokens_flow(
 
     title = f"Incoming Call from {caller_name}"
     body = f"Please answer the call from {caller_name}"
+    caller_identity = (request.caller.email or "").strip().lower()
+    callee_identity = (request.callee.email or "").strip().lower()
+
     called_token_request = TokenRequest(
         room_name=request.room_name,
-        participant_identity=callee_id,
+        participant_identity=callee_identity,
         participant_identity_name=callee_name,
         participant_identity_type=ParticipantType.CALLEE
     )
@@ -462,11 +445,13 @@ async def _prepare_explicit_call_tokens_flow(
                 "type": f"{caller_type}_incoming_call",
                 "action": "receive_call",
                 "room_name": request.room_name,
-                "participant_identity": callee_id,
+                "participant_identity": callee_identity,
                 "participant_identity_name": caller_name,
                 "participant_identity_type": caller_type,
                 "called_user_id": callee_id,
                 "caller_user_id": caller_id,
+                "caller_email": caller_identity,
+                "callee_email": callee_identity,
                 "is_call_recording": str(request.is_call_recording).lower(),
                 "accessToken": called_token_response.accessToken,
                 "wsUrl": called_token_response.wsUrl
@@ -485,7 +470,7 @@ async def _prepare_explicit_call_tokens_flow(
             logger.error({"event": "notification_preparation_failed", "error": str(e), "room_name": request.room_name})
 
     asyncio.create_task(_send_notification_async())
-    return caller_id, callee_id, caller_name
+    return caller_id, callee_id, caller_name, caller_identity, callee_identity
 
 
 async def _prepare_anonymous_caller_call_flow(
@@ -620,14 +605,14 @@ async def get_call_tokens(
     Returns caller token and asynchronously prepares callee notification/token using explicit caller/callee payloads.
     """
     organization_id = (_principal or {}).get("organization_id") or (_principal or {}).get("org_id")
-    caller_id, callee_id, caller_name = await _prepare_explicit_call_tokens_flow(
+    caller_id, callee_id, caller_name, caller_identity, callee_identity = await _prepare_explicit_call_tokens_flow(
         request, background_tasks, manager, organization_id=organization_id
     )
 
     caller_token_response = await get_token_endpoint(
         TokenRequest(
             room_name=request.room_name,
-            participant_identity=caller_id,
+            participant_identity=caller_identity,
             participant_identity_name=caller_name,
             participant_identity_type=ParticipantType.CALLER
         )
@@ -635,8 +620,8 @@ async def get_call_tokens(
 
     logger.info({
         "event": "get-call-tokens",
-        "caller_identity": caller_id,
-        "called_identity": callee_id,
+        "caller_identity": caller_identity,
+        "called_identity": callee_identity,
         "room_name": request.room_name
     })    
     return caller_token_response

@@ -214,9 +214,8 @@ class CallerTokenRequest(TokenRequest):
 
 
 class CallTokenParticipantRequest(BaseModel):
-    id: Optional[str] = None
     name: Optional[str] = None
-    email: Optional[str] = None
+    email: str = Field(..., description="Participant email (required central identity)")
     phone_number: Optional[str] = None
     type: Optional[str] = None
 

@@ -49,7 +49,6 @@ def _split_name(full_name: Optional[str]) -> Tuple[str, str]:
 
 async def _upsert_messaging_participant(
     participant,
-    id_value: Optional[str],
     label: str,
     organization_id: Optional[str],
 ) -> Tuple[str, str, str]:
@@ -60,25 +59,10 @@ async def _upsert_messaging_participant(
     if participant_role == "driver":
         participant_role = "agent"
 
-    # 1) Resolve by provided user id (scoped by organization)
-    if id_value:
-        existing_user = user_service.get_user_by_id(id_value, organization_id=organization_id)
-        if existing_user:
-            first_name, last_name = _split_name(participant_name)
-            updated_user = user_service.update_user(
-                id_value,
-                {
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "email": participant_email or existing_user.get("email", ""),
-                    "phone_number": participant_phone,
-                    "role": participant_role,
-                },
-            )
-            if updated_user:
-                return id_value, _format_user_name(updated_user), (updated_user.get("role") or participant_role)
+    if not participant_email:
+        raise ValueError(f"{label}.email is required")
 
-    # 2) Resolve by organization + email
+    # Resolve by organization + email
     if organization_id and participant_email:
         existing_by_email = user_service.get_user_by_email(participant_email, organization_id=organization_id)
         if existing_by_email:
@@ -97,10 +81,8 @@ async def _upsert_messaging_participant(
             if updated_user:
                 return existing_user_id, _format_user_name(updated_user), (updated_user.get("role") or participant_role)
 
-    # 3) Create new user when not found
+    # Create new user when not found
     first_name, last_name = _split_name(participant_name)
-    if not participant_email:
-        participant_email = f"{label}-{int(time.time() * 1000)}@kasookoo.local"
     created_user = await user_service.create_user(
         email=participant_email,
         phone_number=participant_phone,
@@ -130,13 +112,11 @@ async def get_messaging_token(
         organization_id = (_principal or {}).get("organization_id") or (_principal or {}).get("org_id")
         sender_id, _, _ = await _upsert_messaging_participant(
             participant=request.sender,
-            id_value=request.sender_user_id,
             label="sender",
             organization_id=organization_id,
         )
         receiver_id, _, _ = await _upsert_messaging_participant(
             participant=request.receiver,
-            id_value=request.receiver_user_id,
             label="receiver",
             organization_id=organization_id,
         )
@@ -145,6 +125,9 @@ async def get_messaging_token(
             update={
                 "sender_user_id": sender_id,
                 "receiver_user_id": receiver_id,
+                "participant_identity": ((request.sender.email if request.sender else "") or "").strip().lower(),
+                "participant_identity_name": (request.sender.name if request.sender else None),
+                "participant_identity_type": (request.sender.type if request.sender else None) or "customer",
             }
         )
         return await messaging_service.prepare_push_notification(

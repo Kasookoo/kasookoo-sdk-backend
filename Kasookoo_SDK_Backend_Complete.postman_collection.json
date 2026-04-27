@@ -226,10 +226,10 @@
 								"get-call-tokens"
 							]
 						},
-						"description": "CallTokensRequest: explicit caller + callee profiles. If caller.id / callee.id exist, users are updated; otherwise users are resolved by organization_id + email, or created. Requires scope webrtc:token:create. Use type \"agent\" (legacy \"driver\" is normalized to agent server-side).",
+						"description": "CallTokensRequest: explicit caller + callee profiles using email as central identity. `caller.email` and `callee.email` are required and used as participant identities. Users are resolved by organization_id + email, or created. Requires scope webrtc:token:create.",
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"room_name\": \"call_room_123\",\n  \"caller\": {\n    \"id\": \"{{caller_user_object_id}}\",\n    \"name\": \"John Caller\",\n    \"email\": \"caller@example.com\",\n    \"phone_number\": \"+15550001111\",\n    \"type\": \"agent\"\n  },\n  \"callee\": {\n    \"id\": \"{{callee_user_object_id}}\",\n    \"name\": \"Jane Callee\",\n    \"email\": \"callee@example.com\",\n    \"phone_number\": \"+15550002222\",\n    \"type\": \"customer\"\n  },\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
+							"raw": "{\n  \"room_name\": \"call_room_123\",\n  \"caller\": {\n    \"name\": \"John Caller\",\n    \"email\": \"caller@example.com\",\n    \"phone_number\": \"+15550001111\",\n    \"type\": \"agent\"\n  },\n  \"callee\": {\n    \"name\": \"Jane Callee\",\n    \"email\": \"callee@example.com\",\n    \"phone_number\": \"+15550002222\",\n    \"type\": \"customer\"\n  },\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true,\n  \"is_call_recording\": true\n}"
 						}
 					}
 				},
@@ -1071,10 +1071,10 @@
 								"get-token"
 							]
 						},
-						"description": "MessagingTokenRequest: optional nested sender/receiver (same shape as get-call-tokens participants). If sender_user_id/receiver_user_id are set, users are updated when found; else resolve by X-Organization-Id + email, else create. Legacy sender_user_id/receiver_user_id-only requests still work. Scope messaging:token:create.",
+						"description": "MessagingTokenRequest: sender/receiver participant objects should be provided with mandatory emails. Sender/receiver email is used as central identity for token flow. Users are resolved by X-Organization-Id + email, else created. Scope messaging:token:create.",
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"room_name\": \"chat_room_123\",\n  \"participant_identity\": \"{{messaging_sender_object_id}}\",\n  \"participant_identity_name\": \"John Sender\",\n  \"participant_identity_type\": \"customer\",\n  \"sender_user_id\": \"{{messaging_sender_object_id}}\",\n  \"receiver_user_id\": \"{{messaging_receiver_object_id}}\",\n  \"sender\": {\n    \"id\": \"{{messaging_sender_object_id}}\",\n    \"name\": \"John Sender\",\n    \"email\": \"sender@example.com\",\n    \"phone_number\": \"+15550001111\",\n    \"type\": \"customer\"\n  },\n  \"receiver\": {\n    \"id\": \"{{messaging_receiver_object_id}}\",\n    \"name\": \"Jane Receiver\",\n    \"email\": \"receiver@example.com\",\n    \"phone_number\": \"+15550002222\",\n    \"type\": \"agent\"\n  },\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true\n}"
+							"raw": "{\n  \"room_name\": \"chat_room_123\",\n  \"participant_identity\": \"sender@example.com\",\n  \"participant_identity_name\": \"John Sender\",\n  \"participant_identity_type\": \"customer\",\n  \"sender\": {\n    \"name\": \"John Sender\",\n    \"email\": \"sender@example.com\",\n    \"phone_number\": \"+15550001111\",\n    \"type\": \"customer\"\n  },\n  \"receiver\": {\n    \"name\": \"Jane Receiver\",\n    \"email\": \"receiver@example.com\",\n    \"phone_number\": \"+15550002222\",\n    \"type\": \"agent\"\n  },\n  \"device_type\": \"mobile\",\n  \"is_push_notification\": true\n}"
 						}
 					}
 				},
@@ -2028,6 +2028,44 @@
 									"value": "100"
 								}
 							]
+						}
+					}
+				},
+				{
+					"name": "SDK Identify User (Upsert by Email)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{sdk_access_token}}"
+							},
+							{
+								"key": "X-Organization-Id",
+								"value": "{{organization_id}}",
+								"description": "Optional when organization_id exists in SDK JWT"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/users/identify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"users",
+								"identify"
+							]
+						},
+						"description": "Upsert user profile for SDK identify flow. If email exists in tenant, updates user fields; otherwise creates new user.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Caller\",\n  \"email\": \"john.caller@example.com\",\n  \"phoneNumber\": \"+447700900111\",\n  \"type\": \"customer\"\n}"
 						}
 					}
 				},
